@@ -1,0 +1,20 @@
+.gradle/
+.kotlin/
+**/build/
+local.properties
+.idea/
+*.iml
+.DS_Store
+captures/
+*.jks
+*.keystore
+keystore.properties
+*.apk
+*.aab
+.tools/
+.env
+.env.*
+!.env.example
+/inst_user_settings.tmp
+# 開発PC・個人の計画を含む元資料はローカルに保管する。
+/go-recorder-codex-handoff.md
