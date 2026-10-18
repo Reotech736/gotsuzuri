@@ -99,6 +99,8 @@ Lintレポート: `app\build\reports\lint-results-debug.html`。
 
 ## POCOで実行
 
+### USBで接続
+
 1. 設定 → デバイス情報のOSバージョンを連続タップし、開発者向けオプションを有効にします。HyperOSの項目名はバージョンで異なる場合があります。
 2. 追加設定 → 開発者向けオプション → USBデバッグをON。
 3. データ通信対応USBケーブルで接続。端末を解除し、PCのRSA鍵確認を本人が許可します。
@@ -128,6 +130,34 @@ ADB経由が `INSTALL_FAILED_USER_RESTRICTED` で拒否される場合、端末�
 
 端末のファイル管理 → ダウンロード → `Gotsuzuri-debug.apk` を開き、確認画面を本人が操作します。提供元の許可を求められた場合は画面の内容を確認してください。インストール後は「碁つづり」を開きます。
 
+### Wi-Fiで接続（USB不要）
+
+Android 11以降のワイヤレスデバッグを使います。POCO X8 ProのAndroid 16で、USBをつながずにペアリング・ADB接続・アプリのインストール済み確認まで実施済みです。接続方式の追加確認であり、ロードマップの現在地はステップ1完了のままです。
+
+1. PCと端末を相互通信できる同じLANへ接続します。
+2. 端末の開発者向けオプション → ワイヤレスデバッグをONにします。
+3. Android StudioのDevice Manager上部にあるWi-Fiアイコン → 対象端末のPairからペアリング画面を開けます。QR方式で進まない場合は「Pair using pairing code」を使います。
+4. 端末の「ペア設定コードによるデバイスのペア設定」を開きます。表示中のペアリング用IP・ポートと6桁コードを使います。ワイヤレスデバッグの親画面にある接続用ポートとは別です。
+
+Studioが端末のペア設定待ちから進まない場合は、SDK側ADBでもペアリングできます。
+
+```powershell
+$adb = Join-Path $env:LOCALAPPDATA 'Android\Sdk\platform-tools\adb.exe'
+& $adb pair '<端末IP>:<ペアリング用ポート>'
+# プロンプトで端末に現在表示されている一時コードを入力
+& $adb connect '<端末IP>:<接続用ポート>'
+& $adb -s '<端末IP>:<接続用ポート>' get-state
+```
+
+`device` が返れば接続できています。以降は同じ `-s` の指定でインストール・起動・ログ取得を行えます。Studioの上部の端末選択欄でもPOCOを選んでください。
+
+- ON/OFFやペア設定画面の開き直しでポート・コードが変わるため、古いスクリーンショットの値を再利用しないでください。実際のIP・一時コード・コードを含むスクリーンショットはGitへ保存しません。
+- `adb mdns services` で現在のサービスを調べられます。`_adb-tls-pairing._tcp` はペア設定用、`_adb-tls-connect._tcp` は通常の接続用です。
+- このPCではscrcpy付属ADB 37.0.0のサーバーが稼働していました。接続端末がないことを確認し、SDK側ADBで `kill-server` → `start-server` を行って37.0.1へ統一後、現在のコード・ポートでペアリングと接続に成功しました。QR方式が停止した直接の原因は未特定です。
+- ペアリングとWi-Fi接続は確認済みですが、Wi-Fi経由でのAPK再インストールは未確認です。HyperOSのインストール確認が必要な場合は本人が操作します。
+
+[Android公式のワイヤレスADB手順](https://developer.android.com/tools/adb#connect-to-a-device-over-wi-fi)
+
 ## 写真の確認と再取得
 
 「写真を保存」で `Pictures/Gotsuzuri/Gotsuzuri_<日時>_<乱数>.jpg` を作成します。「保存した写真を開く」、ギャラリー、またはファイル管理から開けます。端末を回転した場合の保存画像の向きも確認してください。プレビューは全体が見えるFIT_CENTERです。撮影画像とプレビューの画角が完全に同一になる保証はありません。
@@ -152,6 +182,7 @@ PCへ取得する場合（個人の撮影画像はGit管理外）:
 | assembleDebug | 成功（2026-10-19）。最終アイコン修正を含むAPKを再ビルド済み |
 | lintDebug | 成功、エラー0・警告11件。更新案内等（下記） |
 | 実機ADB認識 | 認証済み、device状態を確認 |
+| Wi-Fiデバッグ | 2026-10-19、SDK版ADB 37.0.1のコード方式でペアリング成功。USBなしでdevice状態・POCOの販売名・碁つづりのインストール済み状態を確認 |
 | POCOの正式モデル・Android / HyperOS | POCO X8 Pro / 2511FPC34G、Android 16 API 36、OS3.0.307.0.WPJMIXM、arm64-v8a（ADBで確認） |
 | APKインストール | 完了。ADB経由では2回とも INSTALL_FAILED_USER_RESTRICTED で拒否されたため、端末Downloadへコピーし、本人がファイル管理からインストール。versionName 0.1.0をADBでも確認 |
 | 実機起動 | am startと実行プロセスで確認。起動後のアプリ限定エラーログにエラーなし |

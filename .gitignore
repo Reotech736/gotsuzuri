@@ -16,5 +16,6 @@ keystore.properties
 .env.*
 !.env.example
 /inst_user_settings.tmp
+/.codex-remote-attachments/
 # 開発PC・個人の計画を含む元資料はローカルに保管する。
 /go-recorder-codex-handoff.md
