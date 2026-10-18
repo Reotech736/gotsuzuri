@@ -43,6 +43,11 @@ Windows上に直接導入します。WSL・Docker・AWSは不要です。元の�
 
 この作業フォルダには `.gradle/config.properties` と `.idea/gradle.xml` をローカル設定として用意し、`GRADLE_LOCAL_JAVA_HOME` にJDK 21を指定済みです。いずれもGit管理外です。別PCでは上の手順でJDKを選んでください。
 
+Studioの表示設定（2026-10-19確認）:
+
+- Device Managerは左上のGroup By → Statusで接続状態ごとに分類し、Offlineを折りたたみ済みです。OnlineのPOCOを実行先に使います。未接続のWi-Fi探索情報とエミュレーターは削除せず残しています。
+- このRabbit 1環境のLanguage and RegionではEnglishのみ選択可能でした。Marketplaceの[Japanese Language Pack](https://plugins.jetbrains.com/plugin/13964-japanese-language-pack------)も「IntelliJ IDEAでのみ利用可能」と表示され、インストールボタンは無効でした。日本語化プラグインの導入や表示言語の変更はしていません。
+
 PowerShellでビルドする場合:
 
 ```powershell
