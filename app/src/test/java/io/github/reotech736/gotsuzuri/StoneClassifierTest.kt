@@ -2,6 +2,7 @@ package io.github.reotech736.gotsuzuri
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNotNull
 import org.junit.Test
 import kotlin.math.hypot
 
@@ -25,8 +26,8 @@ class StoneClassifierTest {
         }
     }
 
-    private fun disk(pixels: IntArray, column: Int, row: Int, color: Int) {
-        val point = projection.intersection(column, row)
+    private fun disk(pixels: IntArray, column: Int, row: Int, color: Int, dx: Double = 0.0, dy: Double = 0.0) {
+        val point = projection.imagePointAt(column + dx, row + dy)!!
         val cx = (point.x * (size - 1)).toInt()
         val cy = (point.y * (size - 1)).toInt()
         for (dy in -15..15) for (dx in -15..15) {
@@ -93,6 +94,50 @@ class StoneClassifierTest {
     @Test fun tooFewPixelsAreUnknown() {
         val result = StoneClassifier.analyze(PixelImage(37, 37, IntArray(37 * 37) { boardColor }), projection)
         assertEquals(361, result.count(IntersectionState.UNKNOWN))
+    }
+
+    @Test fun findsShiftedStoneTopsWithoutMovingTheLogicalIntersections() {
+        val pixels = board()
+        disk(pixels, 5, 7, 0xFF151515.toInt(), dx = 0.2, dy = -0.35)
+        disk(pixels, 13, 12, 0xFFF0F0F0.toInt(), dx = -0.2, dy = 0.35)
+        val result = StoneClassifier.analyze(PixelImage(size, size, pixels), projection)
+        assertEquals(IntersectionState.BLACK, state(result, 5, 7))
+        assertEquals(IntersectionState.WHITE, state(result, 13, 12))
+        assertEquals(1, result.count(IntersectionState.BLACK))
+        assertEquals(1, result.count(IntersectionState.WHITE))
+        val detected = result.candidates[7 * 19 + 5].stoneCenter
+        assertNotNull(detected)
+        assertTrue(detected!!.y < projection.intersection(5, 7).y)
+        assertTrue(state(result, 5, 6) !in listOf(IntersectionState.BLACK, IntersectionState.WHITE))
+    }
+
+    @Test fun shiftedAdjacentDifferentColorsAreNotSwappedOrDuplicated() {
+        val pixels = board()
+        disk(pixels, 8, 9, 0xFF151515.toInt(), dy = -0.3)
+        disk(pixels, 9, 9, 0xFFF0F0F0.toInt(), dy = -0.3)
+        val result = StoneClassifier.analyze(PixelImage(size, size, pixels), projection)
+        assertEquals(IntersectionState.BLACK, state(result, 8, 9))
+        assertEquals(IntersectionState.WHITE, state(result, 9, 9))
+        assertEquals(1, result.count(IntersectionState.BLACK))
+        assertEquals(1, result.count(IntersectionState.WHITE))
+    }
+
+    @Test fun shiftedEdgeStoneDoesNotReadOutsideBoardOrImage() {
+        val pixels = board()
+        disk(pixels, 0, 8, 0xFF151515.toInt(), dy = -0.3)
+        val result = StoneClassifier.analyze(PixelImage(size, size, pixels), projection)
+        assertEquals(IntersectionState.BLACK, state(result, 0, 8))
+        assertEquals(1, result.count(IntersectionState.BLACK))
+        assertEquals(361, result.candidates.size)
+    }
+
+    @Test fun stoneHalfwayBetweenTwoIntersectionsIsUnknownRatherThanDuplicated() {
+        val pixels = board()
+        disk(pixels, 9, 8, 0xFF151515.toInt(), dy = 0.5)
+        val result = StoneClassifier.analyze(PixelImage(size, size, pixels), projection)
+        assertEquals(IntersectionState.UNKNOWN, state(result, 9, 8))
+        assertEquals(IntersectionState.UNKNOWN, state(result, 9, 9))
+        assertEquals(0, result.count(IntersectionState.BLACK))
     }
 
     @Test(expected = IllegalArgumentException::class)

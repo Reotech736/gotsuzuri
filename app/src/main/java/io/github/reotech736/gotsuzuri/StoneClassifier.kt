@@ -12,7 +12,9 @@ data class IntersectionCandidate(
     val column: Int,
     val row: Int,
     val state: IntersectionState,
-    val reason: String? = null
+    val reason: String? = null,
+    // 見つけた上面の画像座標。論理交点や四隅を移動する値ではない。
+    val stoneCenter: ImagePoint? = null
 )
 
 data class StoneAnalysis(val candidates: List<IntersectionCandidate>, val note: String) {
@@ -32,6 +34,7 @@ class PixelImage(val width: Int, val height: Int, private val pixels: IntArray) 
 object StoneClassifier {
     private data class ColorSample(val luminance: Double, val saturation: Double, val blueRatio: Double)
     private data class Patch(val colors: List<ColorSample>, val enoughPixels: Boolean)
+    private data class StoneMatch(val state: IntersectionState, val column: Double, val row: Double, val score: Double)
 
     fun analyze(image: PixelImage, projection: BoardProjection): StoneAnalysis {
         val patches = (0..18).flatMap { row ->
@@ -47,24 +50,83 @@ object StoneClassifier {
             median(wood.map { it.blueRatio })
         ) else null
 
+        val matches = patches.mapIndexed { index, patch ->
+            if (reference == null || !patch.enoughPixels) emptyList() else {
+                val column = index % 19
+                val row = index / 19
+                buildList {
+                    // 上下を固定しない。交点間隔の半分より狭い範囲で候補を探す。
+                    for (dy in listOf(-0.4, -0.2, 0.0, 0.2, 0.4)) {
+                        for (dx in listOf(-0.4, -0.2, 0.0, 0.2, 0.4)) {
+                            val x = column + dx
+                            val y = row + dy
+                            if (x !in 0.0..18.0 || y !in 0.0..18.0) continue
+                            val sample = samplePatch(image, projection, x, y)
+                            if (!sample.enoughPixels) continue
+                            val state = classifyPatch(column, row, sample.colors, reference).state
+                            if (state == IntersectionState.BLACK || state == IntersectionState.WHITE) {
+                                val support = sample.colors.count { classifyPatch(column, row, listOf(it), reference).state == state }
+                                    .toDouble() / sample.colors.size
+                                add(StoneMatch(state, x, y, support - hypot(dx, dy) * 0.08))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        val centralStates = patches.mapIndexed { index, patch ->
+            if (reference == null || !patch.enoughPixels) IntersectionState.UNKNOWN
+            else classifyPatch(index % 19, index / 19, patch.colors, reference).state
+        }
+        val selected = matches.mapIndexed { index, options ->
+            val central = centralStates[index]
+            // 交点自体に十分な石の根拠がある場合、周辺の別色の隣石で覆さない。
+            if (central == IntersectionState.BLACK || central == IntersectionState.WHITE) {
+                options.firstOrNull { it.column == (index % 19).toDouble() && it.row == (index / 19).toDouble() }
+            } else {
+                options.takeIf { it.map { match -> match.state }.distinct().size == 1 }
+                    ?.maxByOrNull { it.score }
+            }
+        }
         val candidates = patches.mapIndexed { index, patch ->
             val column = index % 19
             val row = index / 19
+            val match = selected[index]
+            val collision = match != null && selected.withIndex().any { (otherIndex, other) ->
+                val distance = if (other == null) Double.POSITIVE_INFINITY
+                    else hypot(match.column - other.column, match.row - other.row)
+                otherIndex != index && other != null &&
+                    ((centralStates[index] !in listOf(IntersectionState.BLACK, IntersectionState.WHITE) &&
+                        centralStates[otherIndex] in listOf(IntersectionState.BLACK, IntersectionState.WHITE) && distance < 0.8) ||
+                        (distance < 0.45 && other.score >= match.score - 0.2))
+            }
             when {
                 reference == null -> IntersectionCandidate(column, row, IntersectionState.UNKNOWN, "木地の色を推定できません")
                 !patch.enoughPixels -> IntersectionCandidate(column, row, IntersectionState.UNKNOWN, "交点周辺が小さいか画像端です")
-                else -> classifyPatch(column, row, patch.colors, reference)
+                (match == null && matches[index].map { it.state }.distinct().size > 1) || collision ->
+                    IntersectionCandidate(column, row, IntersectionState.UNKNOWN, "石の色または隣の交点との対応が曖昧です")
+                match != null -> IntersectionCandidate(column, row, match.state,
+                    stoneCenter = projection.imagePointAt(match.column, match.row))
+                else -> {
+                    val central = classifyPatch(column, row, patch.colors, reference)
+                    // 中心だけ木地でも、周囲に石の一部がある場合は空と断定しない。
+                    val nearbyStone = selected.any { other -> other != null &&
+                        hypot(column - other.column, row - other.row) < 0.8 }
+                    if (nearbyStone && central.state == IntersectionState.EMPTY) {
+                        IntersectionCandidate(column, row, IntersectionState.UNKNOWN, "周囲の石との対応を確認してください")
+                    } else central
+                }
             }
         }
         val note = if (reference == null) "木地の色を十分に推定できないため、すべて不明としました。"
-        else "色と明るさによる試験判定です。影・反射・隠れで誤るため、実際の配置と比較してください。"
+        else "交点周辺の石候補を探す試験判定です。影・反射・隠れや大きなずれで誤るため、配置と比較してください。"
         return StoneAnalysis(candidates, note)
     }
 
-    private fun samplePatch(image: PixelImage, projection: BoardProjection, column: Int, row: Int): Patch {
-        val center = projection.intersection(column, row)
-        val horizontal = projection.imagePointAt(if (column < 18) column + 1.0 else column - 1.0, row.toDouble())!!
-        val vertical = projection.imagePointAt(column.toDouble(), if (row < 18) row + 1.0 else row - 1.0)!!
+    private fun samplePatch(image: PixelImage, projection: BoardProjection, column: Double, row: Double): Patch {
+        val center = projection.imagePointAt(column, row)!!
+        val horizontal = projection.imagePointAt(if (column <= 17) column + 1.0 else column - 1.0, row)!!
+        val vertical = projection.imagePointAt(column, if (row <= 17) row + 1.0 else row - 1.0)!!
         val hx = (horizontal.x - center.x) * (image.width - 1)
         val hy = (horizontal.y - center.y) * (image.height - 1)
         val vx = (vertical.x - center.x) * (image.width - 1)
@@ -83,6 +145,9 @@ object StoneClassifier {
         val colors = indices.map { index -> features(image.pixel(index % image.width, index / image.width)) }
         return Patch(colors, shortSpacing >= 4.0 && colors.size >= 8)
     }
+
+    private fun samplePatch(image: PixelImage, projection: BoardProjection, column: Int, row: Int) =
+        samplePatch(image, projection, column.toDouble(), row.toDouble())
 
     private fun classifyPatch(column: Int, row: Int, colors: List<ColorSample>, wood: ColorSample): IntersectionCandidate {
         var dark = 0

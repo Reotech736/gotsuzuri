@@ -151,7 +151,7 @@ fun BoardPhotoScreen(uri: String, onReturnToCamera: () -> Unit) {
             }
             if (result != null) {
                 Text("試験候補：黒${result.count(IntersectionState.BLACK)}・白${result.count(IntersectionState.WHITE)}・空${result.count(IntersectionState.EMPTY)}・不明${result.count(IntersectionState.UNKNOWN)}")
-                Text("黒白の丸＝石候補、緑点＝空、橙の輪＝不明。実際の配置と比べてください。")
+                Text("黒白の丸＝石候補、細線＝対応する交点、緑点＝空、橙の輪＝不明。")
                 Text(result.note, style = MaterialTheme.typography.bodySmall)
             } else if (currentAnalysis?.failed == true) {
                 Text("石の試験判定に失敗しました。もう一度お試しください。", color = MaterialTheme.colorScheme.error)
@@ -279,13 +279,17 @@ private fun BoardImage(
         if (projection != null) {
             for (row in 0..18) for (column in 0..18) {
                 val position = display(projection.intersection(column, row))
-                val state = analysis?.candidates?.get(row * 19 + column)?.state
+                val candidate = analysis?.candidates?.get(row * 19 + column)
+                val state = candidate?.state
                 when (state) {
                     IntersectionState.BLACK, IntersectionState.WHITE -> {
                         val fill = if (state == IntersectionState.BLACK) Color.Black else Color.White
-                        drawCircle(fill, 4.dp.toPx(), position)
+                        val stonePosition = candidate.stoneCenter?.let(::display) ?: position
+                        drawLine(Color.Cyan, position, stonePosition, 1.dp.toPx())
+                        drawCircle(Color.Cyan, 1.5.dp.toPx(), position)
+                        drawCircle(fill, 4.dp.toPx(), stonePosition)
                         drawCircle(if (state == IntersectionState.BLACK) Color.White else Color.Black,
-                            4.dp.toPx(), position, style = Stroke(1.dp.toPx()))
+                            4.dp.toPx(), stonePosition, style = Stroke(1.dp.toPx()))
                     }
                     IntersectionState.UNKNOWN -> drawCircle(Color(0xFFFF9800), 3.dp.toPx(), position, style = Stroke(1.5.dp.toPx()))
                     else -> {
