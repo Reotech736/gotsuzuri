@@ -151,7 +151,7 @@ fun BoardPhotoScreen(uri: String, onReturnToCamera: () -> Unit) {
             }
             if (result != null) {
                 Text("試験候補：黒${result.count(IntersectionState.BLACK)}・白${result.count(IntersectionState.WHITE)}・空${result.count(IntersectionState.EMPTY)}・不明${result.count(IntersectionState.UNKNOWN)}")
-                Text("黒白の丸＝石候補、細線＝対応する交点、緑点＝空、橙の輪＝不明。")
+                Text("黒白の丸＝石候補、水色の輪＝交点、線＝ずれがある場合、緑点＝空、橙の輪＝不明。")
                 Text(result.note, style = MaterialTheme.typography.bodySmall)
             } else if (currentAnalysis?.failed == true) {
                 Text("石の試験判定に失敗しました。もう一度お試しください。", color = MaterialTheme.colorScheme.error)
@@ -285,11 +285,12 @@ private fun BoardImage(
                     IntersectionState.BLACK, IntersectionState.WHITE -> {
                         val fill = if (state == IntersectionState.BLACK) Color.Black else Color.White
                         val stonePosition = candidate.stoneCenter?.let(::display) ?: position
-                        drawLine(Color.Cyan, position, stonePosition, 1.dp.toPx())
-                        drawCircle(Color.Cyan, 1.5.dp.toPx(), position)
                         drawCircle(fill, 4.dp.toPx(), stonePosition)
                         drawCircle(if (state == IntersectionState.BLACK) Color.White else Color.Black,
                             4.dp.toPx(), stonePosition, style = Stroke(1.dp.toPx()))
+                        // 候補の丸の下へ隠さず、同じ位置でも交点の輪を確認できるようにする。
+                        drawLine(Color.Cyan, position, stonePosition, 1.5.dp.toPx())
+                        drawCircle(Color.Cyan, 2.dp.toPx(), position, style = Stroke(1.dp.toPx()))
                     }
                     IntersectionState.UNKNOWN -> drawCircle(Color(0xFFFF9800), 3.dp.toPx(), position, style = Stroke(1.5.dp.toPx()))
                     else -> {

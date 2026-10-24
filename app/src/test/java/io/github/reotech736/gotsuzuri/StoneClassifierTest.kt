@@ -140,6 +140,31 @@ class StoneClassifierTest {
         assertEquals(0, result.count(IntersectionState.BLACK))
     }
 
+    @Test fun doesNotPlaceAWhiteCandidateOnWoodColoredPixelsInsideItsPatch() {
+        val pixels = board()
+        disk(pixels, 9, 9, 0xFFF0F0F0.toInt())
+        for (y in 358..362) for (x in 358..362) pixels[y * size + x] = boardColor
+        val result = StoneClassifier.analyze(PixelImage(size, size, pixels), projection)
+        assertEquals(1, result.count(IntersectionState.WHITE))
+        val candidate = result.candidates[9 * 19 + 9].stoneCenter!!
+        val x = (candidate.x * (size - 1)).toInt()
+        val y = (candidate.y * (size - 1)).toInt()
+        assertEquals(0xFFF0F0F0.toInt(), pixels[y * size + x])
+    }
+
+    @Test fun smallHighlightMovesTheBlackCandidateInsteadOfLosingTheStone() {
+        val pixels = board()
+        disk(pixels, 9, 9, 0xFF151515.toInt())
+        for (y in 358..362) for (x in 358..362) pixels[y * size + x] = 0xFFF0F0F0.toInt()
+        val result = StoneClassifier.analyze(PixelImage(size, size, pixels), projection)
+        assertEquals(1, result.count(IntersectionState.BLACK))
+        assertEquals(0, result.count(IntersectionState.WHITE))
+        val candidate = result.candidates[9 * 19 + 9].stoneCenter!!
+        val x = (candidate.x * (size - 1)).toInt()
+        val y = (candidate.y * (size - 1)).toInt()
+        assertEquals(0xFF151515.toInt(), pixels[y * size + x])
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun rejectsInvalidPixelBuffer() {
         PixelImage(20, 20, IntArray(10))

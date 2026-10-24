@@ -33,7 +33,7 @@ class PixelImage(val width: Int, val height: Int, private val pixels: IntArray) 
 /** 木地の色を基準にした静止画用の試験判定。手や石の遮蔽を復元する処理ではない。 */
 object StoneClassifier {
     private data class ColorSample(val luminance: Double, val saturation: Double, val blueRatio: Double)
-    private data class Patch(val colors: List<ColorSample>, val enoughPixels: Boolean)
+    private data class Patch(val colors: List<ColorSample>, val enoughPixels: Boolean, val center: ColorSample)
     private data class StoneMatch(val state: IntersectionState, val column: Double, val row: Double, val score: Double)
 
     fun analyze(image: PixelImage, projection: BoardProjection): StoneAnalysis {
@@ -63,7 +63,7 @@ object StoneClassifier {
                             if (x !in 0.0..18.0 || y !in 0.0..18.0) continue
                             val sample = samplePatch(image, projection, x, y)
                             if (!sample.enoughPixels) continue
-                            val state = classifyPatch(column, row, sample.colors, reference).state
+                            val state = classifySample(column, row, sample, reference).state
                             if (state == IntersectionState.BLACK || state == IntersectionState.WHITE) {
                                 val support = sample.colors.count { classifyPatch(column, row, listOf(it), reference).state == state }
                                     .toDouble() / sample.colors.size
@@ -76,7 +76,7 @@ object StoneClassifier {
         }
         val centralStates = patches.mapIndexed { index, patch ->
             if (reference == null || !patch.enoughPixels) IntersectionState.UNKNOWN
-            else classifyPatch(index % 19, index / 19, patch.colors, reference).state
+            else classifySample(index % 19, index / 19, patch, reference).state
         }
         val selected = matches.mapIndexed { index, options ->
             val central = centralStates[index]
@@ -108,7 +108,7 @@ object StoneClassifier {
                 match != null -> IntersectionCandidate(column, row, match.state,
                     stoneCenter = projection.imagePointAt(match.column, match.row))
                 else -> {
-                    val central = classifyPatch(column, row, patch.colors, reference)
+                    val central = classifySample(column, row, patch, reference)
                     // 中心だけ木地でも、周囲に石の一部がある場合は空と断定しない。
                     val nearbyStone = selected.any { other -> other != null &&
                         hypot(column - other.column, row - other.row) < 0.8 }
@@ -143,11 +143,24 @@ object StoneClassifier {
             if (x in 0 until image.width && y in 0 until image.height) indices.add(y * image.width + x)
         }
         val colors = indices.map { index -> features(image.pixel(index % image.width, index / image.width)) }
-        return Patch(colors, shortSpacing >= 4.0 && colors.size >= 8)
+        val centerX = (center.x * (image.width - 1)).roundToInt().coerceIn(0, image.width - 1)
+        val centerY = (center.y * (image.height - 1)).roundToInt().coerceIn(0, image.height - 1)
+        return Patch(colors, shortSpacing >= 4.0 && colors.size >= 8, features(image.pixel(centerX, centerY)))
     }
 
     private fun samplePatch(image: PixelImage, projection: BoardProjection, column: Int, row: Int) =
         samplePatch(image, projection, column.toDouble(), row.toDouble())
+
+    private fun classifySample(column: Int, row: Int, patch: Patch, wood: ColorSample): IntersectionCandidate {
+        val result = classifyPatch(column, row, patch.colors, wood)
+        if (result.state == IntersectionState.BLACK || result.state == IntersectionState.WHITE) {
+            // 周囲だけが隣石の色でも、候補位置自体が木地・罫線なら石の中心とはしない。
+            val centerState = classifyPatch(column, row, listOf(patch.center), wood).state
+            if (centerState != result.state) return IntersectionCandidate(column, row, IntersectionState.UNKNOWN,
+                "候補位置と周囲の色が一致しません")
+        }
+        return result
+    }
 
     private fun classifyPatch(column: Int, row: Int, colors: List<ColorSample>, wood: ColorSample): IntersectionCandidate {
         var dark = 0
