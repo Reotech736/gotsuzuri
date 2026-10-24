@@ -120,4 +120,12 @@ class BoardGeometryTest {
         assertNull(ImageViewport.fit(300, 400, 600, 0))
         assertNotNull(ImageViewport.fit(1, 1, 1, 1))
     }
+
+    @Test fun fractionalCoordinatesStaySeparateFromLogicalIntersectionIndices() {
+        val projection = BoardProjection.fromCorners(square)!!
+        assertPoint(ImagePoint(0.25, 0.75), projection.imagePointAt(4.5, 13.5)!!)
+        assertNull(projection.imagePointAt(-0.1, 9.0))
+        assertNull(projection.imagePointAt(18.1, 9.0))
+        assertNull(projection.imagePointAt(Double.NaN, 9.0))
+    }
 }

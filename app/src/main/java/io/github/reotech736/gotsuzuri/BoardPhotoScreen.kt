@@ -34,6 +34,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.withTransform
@@ -55,6 +56,11 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 private data class PhotoLoad(val image: ImageBitmap? = null, val failed: Boolean = false)
+private data class PhotoAnalysis(
+    val corners: List<ImagePoint>,
+    val result: StoneAnalysis? = null,
+    val failed: Boolean = false
+)
 
 @Composable
 fun BoardPhotoScreen(uri: String, onReturnToCamera: () -> Unit) {
@@ -85,6 +91,26 @@ fun BoardPhotoScreen(uri: String, onReturnToCamera: () -> Unit) {
     var coordinates by rememberSaveable(uri) { mutableStateOf(doubleArrayOf()) }
     val corners = coordinates.asList().chunked(2).map { ImagePoint(it[0], it[1]) }
     val projection = remember(corners) { BoardProjection.fromCorners(corners) }
+    var analysisRun by rememberSaveable(uri) { mutableIntStateOf(0) }
+    val analysis by produceState<PhotoAnalysis?>(null, photo.image, corners, analysisRun) {
+        value = null
+        val image = photo.image
+        if (analysisRun > 0 && image != null && projection != null) {
+            value = withContext(Dispatchers.Default) {
+                try {
+                    val pixels = IntArray(image.width * image.height)
+                    image.asAndroidBitmap().getPixels(pixels, 0, image.width, 0, 0, image.width, image.height)
+                    PhotoAnalysis(corners, StoneClassifier.analyze(PixelImage(image.width, image.height, pixels), projection))
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    PhotoAnalysis(corners, failed = true)
+                }
+            }
+        }
+    }
+    val currentAnalysis = analysis?.takeIf { analysisRun > 0 && it.corners == corners }
+    val result = currentAnalysis?.result
     val cornerNames = listOf("左上", "右上", "右下", "左下")
     BackHandler(onBack = onReturnToCamera)
 
@@ -108,17 +134,35 @@ fun BoardPhotoScreen(uri: String, onReturnToCamera: () -> Unit) {
             BoardImage(
                 image, corners, projection,
                 onCornersChange = { points ->
+                    analysisRun = 0
                     coordinates = points.flatMap { listOf(it.x, it.y) }.toDoubleArray()
                 },
+                analysis = result,
                 modifier = Modifier.fillMaxWidth().weight(1f)
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(enabled = corners.isNotEmpty(), onClick = {
+                    analysisRun = 0
                     coordinates = coordinates.dropLast(2).toDoubleArray()
                 }) { Text("1点戻す") }
-                TextButton(enabled = corners.isNotEmpty(), onClick = { coordinates = doubleArrayOf() }) {
+                TextButton(enabled = corners.isNotEmpty(), onClick = { analysisRun = 0; coordinates = doubleArrayOf() }) {
                     Text("すべてやり直す")
                 }
+            }
+            if (result != null) {
+                Text("試験候補：黒${result.count(IntersectionState.BLACK)}・白${result.count(IntersectionState.WHITE)}・空${result.count(IntersectionState.EMPTY)}・不明${result.count(IntersectionState.UNKNOWN)}")
+                Text("黒白の丸＝石候補、緑点＝空、橙の輪＝不明。実際の配置と比べてください。")
+                Text(result.note, style = MaterialTheme.typography.bodySmall)
+            } else if (currentAnalysis?.failed == true) {
+                Text("石の試験判定に失敗しました。もう一度お試しください。", color = MaterialTheme.colorScheme.error)
+            } else if (analysisRun > 0) {
+                Text("石の配置を試験判定しています。")
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(enabled = projection != null && (analysisRun == 0 || currentAnalysis != null), onClick = { analysisRun++ }) {
+                    Text("石の配置を試験判定")
+                }
+                if (analysisRun > 0) TextButton(onClick = { analysisRun = 0 }) { Text("交点だけ表示") }
             }
         } else {
             Text(
@@ -138,7 +182,8 @@ private fun BoardImage(
     corners: List<ImagePoint>,
     projection: BoardProjection?,
     onCornersChange: (List<ImagePoint>) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    analysis: StoneAnalysis? = null
 ) {
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
     val viewport = remember(image, viewSize) {
@@ -234,8 +279,20 @@ private fun BoardImage(
         if (projection != null) {
             for (row in 0..18) for (column in 0..18) {
                 val position = display(projection.intersection(column, row))
-                drawCircle(Color.Black, 3.dp.toPx(), position)
-                drawCircle(Color.Cyan, 1.8.dp.toPx(), position)
+                val state = analysis?.candidates?.get(row * 19 + column)?.state
+                when (state) {
+                    IntersectionState.BLACK, IntersectionState.WHITE -> {
+                        val fill = if (state == IntersectionState.BLACK) Color.Black else Color.White
+                        drawCircle(fill, 4.dp.toPx(), position)
+                        drawCircle(if (state == IntersectionState.BLACK) Color.White else Color.Black,
+                            4.dp.toPx(), position, style = Stroke(1.dp.toPx()))
+                    }
+                    IntersectionState.UNKNOWN -> drawCircle(Color(0xFFFF9800), 3.dp.toPx(), position, style = Stroke(1.5.dp.toPx()))
+                    else -> {
+                        drawCircle(Color.Black, 3.dp.toPx(), position)
+                        drawCircle(if (state == IntersectionState.EMPTY) Color.Green else Color.Cyan, 1.8.dp.toPx(), position)
+                    }
+                }
             }
         }
         corners.forEachIndexed { index, point ->

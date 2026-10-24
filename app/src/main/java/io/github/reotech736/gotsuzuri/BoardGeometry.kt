@@ -32,6 +32,14 @@ data class ImageViewport(val left: Double, val top: Double, val width: Double, v
 class BoardProjection private constructor(private val coefficients: DoubleArray) {
     fun intersection(column: Int, row: Int): ImagePoint {
         require(column in 0..18 && row in 0..18)
+        return imagePointAt(column.toDouble(), row.toDouble())!!
+    }
+
+    /** 交点周辺の色を盤面上の一定間隔で調べるための連続座標。盤外は推測しない。 */
+    fun imagePointAt(column: Double, row: Double): ImagePoint? {
+        if (!column.isFinite() || !row.isFinite() || column !in 0.0..18.0 || row !in 0.0..18.0) {
+            return null
+        }
         val u = column / 18.0
         val v = row / 18.0
         val denominator = coefficients[6] * u + coefficients[7] * v + 1
