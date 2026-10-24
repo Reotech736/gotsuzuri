@@ -67,6 +67,15 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun CameraScreen() {
+    var boardPhotoUri by rememberSaveable { mutableStateOf<String?>(null) }
+    var message by rememberSaveable { mutableStateOf("カメラを許可すると撮影できます。") }
+    var savedUri by rememberSaveable { mutableStateOf<String?>(null) }
+    var wideAngle by rememberSaveable { mutableStateOf(false) }
+    // 写真を確認している間はカメラ側のEffectをCompositionから外し、カメラを解放する。
+    boardPhotoUri?.let { uri ->
+        BoardPhotoScreen(uri) { boardPhotoUri = null }
+        return
+    }
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     fun cameraAllowed() = ContextCompat.checkSelfPermission(
@@ -74,11 +83,10 @@ private fun CameraScreen() {
     ) == PackageManager.PERMISSION_GRANTED
 
     var allowed by remember { mutableStateOf(cameraAllowed()) }
-    var message by rememberSaveable { mutableStateOf("カメラを許可すると撮影できます。") }
-    var savedUri by rememberSaveable { mutableStateOf<String?>(null) }
     var capture by remember { mutableStateOf<ImageCapture?>(null) }
     var saving by remember { mutableStateOf(false) }
     var retry by remember { mutableIntStateOf(0) }
+    var minimumZoom by remember { mutableStateOf(1f) }
     val executor = remember(context) { ContextCompat.getMainExecutor(context) }
     val previewView = remember(context) {
         PreviewView(context).apply {
@@ -97,13 +105,17 @@ private fun CameraScreen() {
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) allowed = cameraAllowed()
+            if (event == Lifecycle.Event.ON_RESUME) {
+                allowed = cameraAllowed()
+                // ロック中などに画角の初期化が中断されても、復帰後に撮影可能へ戻す。
+                if (allowed && capture == null) retry++
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    DisposableEffect(allowed, lifecycleOwner, previewView, retry) {
+    DisposableEffect(allowed, lifecycleOwner, previewView, retry, wideAngle) {
         var disposed = false
         var provider: ProcessCameraProvider? = null
         val preview = Preview.Builder().build()
@@ -111,6 +123,7 @@ private fun CameraScreen() {
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
             .build()
         capture = null
+        minimumZoom = 1f
         if (allowed) {
             message = "カメラを準備しています。"
             val future = ProcessCameraProvider.getInstance(context)
@@ -120,11 +133,29 @@ private fun CameraScreen() {
                         val cameraProvider = future.get()
                         provider = cameraProvider
                         preview.setSurfaceProvider(previewView.surfaceProvider)
-                        cameraProvider.bindToLifecycle(
+                        val camera = cameraProvider.bindToLifecycle(
                             lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, photo
                         )
-                        capture = photo
-                        message = "撮影できます。"
+                        val minRatio = camera.cameraInfo.zoomState.value?.minZoomRatio ?: 1f
+                        minimumZoom = minRatio
+                        val ratio = if (wideAngle && minRatio < 1f) minRatio else 1f
+                        if (wideAngle && minRatio >= 1f) {
+                            message = "このカメラでは広角を利用できません。「標準 1×」を選んでください。"
+                        } else {
+                            // 画角変更の完了前は撮影ボタンを有効にしない。
+                            val zoomResult = camera.cameraControl.setZoomRatio(ratio)
+                            zoomResult.addListener({
+                                if (!disposed) {
+                                    try {
+                                        zoomResult.get()
+                                        capture = photo
+                                        message = "撮影できます。倍率：${String.format(Locale.US, "%.1f", ratio)}×"
+                                    } catch (_: Exception) {
+                                        message = "画角を切り替えられません。標準の選択か再試行をしてください。"
+                                    }
+                                }
+                            }, executor)
+                        }
                     } catch (_: Exception) {
                         message = "カメラを開始できません。他のカメラアプリを閉じて再試行してください。"
                     }
@@ -143,7 +174,7 @@ private fun CameraScreen() {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("碁つづり", style = MaterialTheme.typography.headlineMedium)
-        Text("カメラ動作確認 · 写真は Pictures/Gotsuzuri に保存")
+        Text("碁盤全体を撮影 · 写真は Pictures/Gotsuzuri に保存")
         if (allowed) {
             AndroidView(
                 factory = { previewView },
@@ -161,6 +192,17 @@ private fun CameraScreen() {
         }
         Text(message)
         if (allowed) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                TextButton(enabled = wideAngle && !saving, onClick = { wideAngle = false }) {
+                    Text("標準 1×")
+                }
+                if (minimumZoom < 1f) {
+                    TextButton(enabled = !wideAngle && capture != null && !saving,
+                        onClick = { wideAngle = true }) {
+                        Text("広角 ${String.format(Locale.US, "%.1f", minimumZoom)}×")
+                    }
+                }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(enabled = capture != null && !saving, onClick = {
                     val photo = capture ?: return@Button
@@ -181,8 +223,14 @@ private fun CameraScreen() {
                         photo.takePicture(options, executor, object : ImageCapture.OnImageSavedCallback {
                             override fun onImageSaved(result: ImageCapture.OutputFileResults) {
                                 saving = false
-                                savedUri = result.savedUri?.toString()
-                                message = "保存しました: $name"
+                                val uri = result.savedUri?.toString()
+                                savedUri = uri
+                                if (uri != null) {
+                                    message = "保存しました: $name"
+                                    boardPhotoUri = uri
+                                } else {
+                                    message = "写真を保存しましたが、確認用の画像を開けません。ギャラリーで確認し、再撮影してください。"
+                                }
                             }
                             override fun onError(exception: ImageCaptureException) {
                                 saving = false
