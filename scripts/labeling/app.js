@@ -81,6 +81,7 @@ function circle(context,x,y,r,fill,stroke,width) {
 }
 function render() {
     if(!data || !photo.complete || !photo.naturalWidth) return;
+    drawCornerLoupe();
     ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(photo,0,0);
     const scale=canvas.width / Math.max(1,canvas.getBoundingClientRect().width);
     const valid=validGeometry();
@@ -130,6 +131,28 @@ function render() {
         (missing===0&&!aligning?"全交点にラベルがあります。盤全体を見直してから確認完了にしてください。":"");
 }
 
+function drawCornerLoupe() {
+    const loupe=$("cornerLoupe");
+    loupe.hidden=!aligning||dragging<0;
+    if(loupe.hidden)return;
+    const image=$("loupeImage"),context=image.getContext("2d"),rect=canvas.getBoundingClientRect();
+    const p=data.corners[dragging],zoom=3*rect.width/data.width;
+    context.setTransform(1,0,0,1,0,0);context.fillStyle="#17251d";context.fillRect(0,0,image.width,image.height);
+    context.save();context.translate(image.width/2,image.height/2);context.scale(zoom,zoom);
+    context.imageSmoothingEnabled=true;context.drawImage(photo,-p[0]*data.width,-p[1]*data.height);context.restore();
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        context.beginPath();context.moveTo(120+dx*4,90+dy*4);context.lineTo(120+dx*17,90+dy*17);
+        context.strokeStyle="#111";context.lineWidth=4;context.stroke();
+        context.strokeStyle="#ffd34a";context.lineWidth=2;context.stroke();
+    }
+    $("loupeTitle").textContent=`${dragging+1}の調整 · 表示の3倍（十字の中心が指定位置）`;
+    const x=rect.left+p[0]*rect.width,y=rect.top+p[1]*rect.height;
+    const height=loupe.offsetHeight,width=loupe.offsetWidth;
+    loupe.style.left=`${Math.max(4,Math.min(innerWidth-width-4,x-width/2))}px`;
+    const top=y-height-28>=4?y-height-28:y+28;
+    loupe.style.top=`${Math.max(4,Math.min(innerHeight-height-4,top))}px`;
+}
+
 function drawDetail(center) {
     // 近隣交点を含む範囲を元画像から直接切り出す。モデル用の固定サイズ画像はまだ作らない。
     const c=selected%19,r=Math.floor(selected/19), neighbors=[];
@@ -165,7 +188,7 @@ canvas.onpointerdown=event=>{
             const d=Math.hypot((p[0]-corner[0])*canvas.clientWidth,(p[1]-corner[1])*canvas.clientHeight);
             if(d<24 && d<best){best=d;dragging=i;}
         });
-        if(dragging>=0){remember();canvas.setPointerCapture(event.pointerId);}
+        if(dragging>=0){remember();canvas.setPointerCapture(event.pointerId);render();}
     } else if(validGeometry()) {
         let best=Infinity;
         for(let i=0;i<361;i++) {

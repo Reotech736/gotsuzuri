@@ -20,5 +20,5 @@
 <details><summary>まとめて操作・保存</summary><p>盤全体を確認したうえで使います。石がある点は、必ず黒・白へ修正してください。</p><button id="fillEmpty">未分類をすべて空にする</button><hr><button id="download">JSONをダウンロード</button><label class="file">JSONを読み込む<input id="import" type="file" accept="application/json,.json"></label></details>
 <p id="completion" role="status"></p><button id="finish">盤全体を確認して分類を完了</button><p class="muted">画像・ラベルはPC内に自動保存します。保存失敗時は赤字で表示します。キー：0〜3で分類、矢印で移動、Deleteで未分類。</p>
 </aside>
-</main><dialog id="confirmation"><h2>操作の確認</h2><p id="confirmationText"></p><div class="actions"><button id="confirmationCancel">キャンセル</button><button id="confirmationAccept">実行する</button></div></dialog><noscript>分類画面にはJavaScriptが必要です。</noscript>
+</main><div id="cornerLoupe" hidden><div id="loupeTitle">四隅の調整 · 3倍</div><canvas id="loupeImage" width="240" height="180" aria-label="ドラッグ中の四隅の拡大画像"></canvas></div><dialog id="confirmation"><h2>操作の確認</h2><p id="confirmationText"></p><div class="actions"><button id="confirmationCancel">キャンセル</button><button id="confirmationAccept">実行する</button></div></dialog><noscript>分類画面にはJavaScriptが必要です。</noscript>
 </body></html>
