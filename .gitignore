@@ -12,6 +12,7 @@ keystore.properties
 *.apk
 *.aab
 .tools/
+scripts/labeling/__pycache__/
 .env
 .env.*
 !.env.example

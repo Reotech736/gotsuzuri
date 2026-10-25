@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>碁つづり · 正解ラベル作成</title><link rel="stylesheet" href="/style.css"><script defer src="/app.js"></script></head>
+<body>
+<header><div><span class="eyebrow">GOTSUZURI · STEP 4</span><h1>写真から、正解の石配置を記録</h1></div><div><div id="saveStatus" role="status">読み込み中…</div><button id="retrySave" hidden>再保存</button></div></header>
+<main>
+<section class="board"><div class="toolbar"><strong id="datasetName"></strong><label><input id="showGrid" type="checkbox" checked>交点を表示</label><button id="alignMode">四隅を調整</button><button id="confirmGeometry">位置合わせを確認した</button></div>
+<p id="instruction">最初に、番号の付いた四隅を最外周の交点へ合わせてください。</p>
+<div class="canvasWrap"><canvas id="board" aria-label="原寸写真と19路盤の交点"></canvas></div>
+<p class="muted">画像上の左上を1行1列とします。木枠ではなく盤面の交点が基準です。AIの予測ラベルは表示しません。</p></section>
+<aside>
+<div class="progress"><strong id="progress">未分類361点</strong><progress id="progressBar" max="361" value="0"></progress><p id="counts"></p></div>
+<h2 id="selection">1行・1列</h2><p id="currentLabel">未分類</p>
+<canvas id="detail" width="360" height="270" aria-label="選択した交点周辺の原寸画像"></canvas>
+<p class="muted" id="cropInfo">十字は盤面交点です。石上面の中心とは異なる場合があります。</p>
+<div class="labels" id="labelButtons"><button data-label="empty">0 · 空</button><button data-label="black">1 · 黒</button><button data-label="white">2 · 白</button><button data-label="unknown">3 · 判別不能</button></div>
+<p class="muted">「判別不能」は写真から決められない場合です。「空」とは別に記録します。</p>
+<div class="actions"><button id="previous">← 前へ</button><button id="next">次へ →</button><button id="nextMissing">未分類へ</button><button id="clear">未分類へ戻す</button><button id="undo">取り消す</button></div>
+<label class="option"><input type="checkbox" id="autoAdvance">分類後、次の未分類へ進む</label>
+<details><summary>まとめて操作・保存</summary><p>盤全体を確認したうえで使います。石がある点は、必ず黒・白へ修正してください。</p><button id="fillEmpty">未分類をすべて空にする</button><hr><button id="download">JSONをダウンロード</button><label class="file">JSONを読み込む<input id="import" type="file" accept="application/json,.json"></label></details>
+<p id="completion" role="status"></p><button id="finish">盤全体を確認して分類を完了</button><p class="muted">画像・ラベルはPC内に自動保存します。保存失敗時は赤字で表示します。キー：0〜3で分類、矢印で移動、Deleteで未分類。</p>
+</aside>
+</main><dialog id="confirmation"><h2>操作の確認</h2><p id="confirmationText"></p><div class="actions"><button id="confirmationCancel">キャンセル</button><button id="confirmationAccept">実行する</button></div></dialog><noscript>分類画面にはJavaScriptが必要です。</noscript>
+</body></html>

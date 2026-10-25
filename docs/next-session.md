@@ -2,7 +2,7 @@
 
 更新日: 2026-10-25
 
-最初に [AGENTS.md](../AGENTS.md)、[READMEの現在地・検証記録](../README.md)、[四隅指定の要件](static-board-prototype-requirements.md)、[石判定の試作文書](static-stone-prototype-requirements.md) を読む。進捗・バージョン・実機結果はREADMEを参照する。下記の候補だけを新しい作業の許可とは扱わない。
+最初に [AGENTS.md](../AGENTS.md)、[READMEの現在地・検証記録](../README.md)、[四隅指定の要件](static-board-prototype-requirements.md)、[石判定の試作文書](static-stone-prototype-requirements.md)、[正解ラベル作成の手順](ground-truth-labeling.md) を読む。進捗・バージョン・実機結果はREADMEを参照する。下記の候補だけを新しい作業の許可とは扱わない。
 
 ## 現在地と許可された範囲
 
@@ -47,6 +47,16 @@ POCOに最終APKを更新し、広角0.6倍で新しい写真を表示中。更�
 
 水色線はゼロ長や候補の丸の下に隠れていた。候補より後に線と交点の水色輪を描き、凡例を更新した。回帰テスト2件追加、全28件・ビルド・Lint成功。端末の本人の四隅と画像を保持するため、追加修正版APKは未インストール。現在の端末は `24cc65b` 相当。次の更新時に新しい描画と端末での誤白再検証を行う。端末へ更新済みと誤報告しない。
 
+### 次の開始点: 本人による正解ラベルの分類
+
+本人の依頼で、モデル導入前の評価データ作成へ進んだ。`scripts/labeling/` にローカルの分類画面を追加し、上方撮影の写真1枚を `captures/labeling/reference-top-20261025/` に用意した（Git管理外）。元写真を変更せず、向きを補正した原寸PNGを使用。最初は361点すべて未分類、位置合わせ未確認、分類未完了。既存の認識結果・暫定石数・Codexの推定を正解に埋めていない。
+
+本人は概算四隅と交点表示を確認してから、空・黒・白・判別不能を付ける。未分類を空にする省力化操作は本人の明示操作のみで、分類完了は全体の確認後に別操作で記録する。分類後の保存先は `annotations.json`、直前の保存は `annotations.previous.json`。再開は `scripts/labeling/start.ps1 -DataDirectory captures/labeling/reference-top-20261025`。現在のURLは同フォルダの `server-url.txt` で確認し、ポートを固定値にしない。
+
+次の返信で本人が分類完了を報告したら、まずこのJSONの `reviewCompleted`・`geometryReviewed`・未分類数と元画像ハッシュを確認する。未完了を正解データとして扱わない。完了後、`server.py export` で原寸の周辺画像361枚と出典・ラベル・撮影グループ付きmanifestを書き出し、現在の判定と交点別に照合する。判別不能は通常の空・黒・白の教師分類から除外する。別アングルへのラベル自動伝播・モデル学習・AIランタイム導入はまだ行っていない。撮影グループごとの学習・評価分離を守り、同じ写真の切り出しを両側に混ぜない。
+
+Pythonの自動テスト6件・JS構文確認成功。人工画像のブラウザで分類・取り消し・再読み込み復元・一括入力・完了保存を確認。テスト操作の確認ポップアップが本人に見え、OKされたが、対象は人工画像だけで実写真のラベルは変わっていない。確認表示はその後、画面内ダイアログへ修正し、キャンセルと完了を確認済み。Androidビルド・端末更新は行っておらず、端末は従来の `24cc65b` 相当のまま。
+
 ## 実機確認の進め方
 
 自動化できる確認をCodexがまとめて実行し、本人は権限操作と最後の目視確認を担当する。本人に自動確認を一項目ずつ委ねない。端末が自動ロックされたらその都度本人へ解除を依頼し、自動ロック設定を勝手に変更しない。ロック画面の内容・暗証番号は取得しない。
@@ -59,9 +69,9 @@ SDK側ADBを使い、現在接続中の端末・Wi-Fiポートを確認する。
 
 ```text
 碁つづりの続きです。AGENTS.md、README.md、docs/next-session.md、
-docs/static-board-prototype-requirements.md、docs/static-stone-prototype-requirements.mdを読んでください。
+docs/static-board-prototype-requirements.md、docs/static-stone-prototype-requirements.md、docs/ground-truth-labeling.mdを読んでください。
 ステップ3は完了、ステップ4の石配置の試験判定を実装し実写確認中です。
-記録済みの目視回答を踏まえ、静止画像での候補と実際の石配置の比較を続けてください。
+まず本人の正解ラベル作成の進み具合を確認し、完了した正解と判定結果を比較する作業を続けてください。
 自動確認はまとめて実施し、私は権限操作と最後の目視確認を担当します。
 作業範囲内のコミット・pushは適宜行って構いません。動画・SGF・Issue起票は対象外です。
 ```
