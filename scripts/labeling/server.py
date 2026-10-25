@@ -58,8 +58,18 @@ def atomic_json(path, data):
     temporary.replace(path)
 
 
-def prepare(source, output, dataset_id, group_id, corners):
+def prepare(source, output, dataset_id, group_id, corners, reference=None):
     validate_corners(corners)
+    draft = None
+    if reference is not None:
+        raw = reference.read_bytes()
+        reviewed = json.loads(raw)
+        validate_edit(reviewed, reviewed)
+        if not reviewed["reviewCompleted"] or reviewed["captureGroup"] != group_id:
+            raise ValueError("参考GTは確認完了済みで同じ撮影グループを指定してください")
+        draft = dict(datasetId=reviewed["datasetId"], sourceSha256=reviewed["sourceSha256"],
+                     annotationRevision=reviewed["revision"], annotationSha256=hashlib.sha256(raw).hexdigest(),
+                     coordinateConvention=reviewed["coordinateConvention"], labels=reviewed["labels"])
     output = output.resolve()
     # 個人画像を誤って公開対象へ生成しない。Git管理外のcapturesだけを出力先にする。
     captures = HERE.parents[1] / "captures"
@@ -78,6 +88,8 @@ def prepare(source, output, dataset_id, group_id, corners):
                 coordinateConvention="image-top-left-row-column-1-based",
                 corners=corners, geometryReviewed=False, reviewCompleted=False, labels=[None] * 361,
                 revision=0, savedAt=None)
+    if draft is not None:
+        data.update(referenceDraft=draft, referenceApplied=False)
     atomic_json(output / "annotations.json", data)
     return data
 
@@ -100,8 +112,14 @@ def validate_edit(current, candidate):
     completed = candidate.get("reviewCompleted")
     if type(completed) is not bool or (completed and (not candidate["geometryReviewed"] or None in labels)):
         raise ValueError("未分類の交点が残っています")
+    if "referenceDraft" in current:
+        if candidate.get("referenceDraft") != current["referenceDraft"] or type(candidate.get("referenceApplied")) is not bool:
+            raise ValueError("参考GTの出典は変更できません")
+        if candidate["referenceApplied"] and not candidate["geometryReviewed"]:
+            raise ValueError("参考GTの適用前に位置合わせを確認してください")
     return dict(current, corners=candidate["corners"], geometryReviewed=candidate["geometryReviewed"],
-                reviewCompleted=completed, labels=labels)
+                reviewCompleted=completed, labels=labels,
+                **({"referenceApplied": candidate["referenceApplied"]} if "referenceDraft" in current else {}))
 
 
 def export_crops(folder, output):
@@ -133,6 +151,8 @@ def export_crops(folder, output):
     atomic_json(output / "manifest.json", dict(schemaVersion=1, datasetId=data["datasetId"],
                 captureGroup=data["captureGroup"], sourceSha256=data["sourceSha256"],
                 annotationRevision=data["revision"], corners=data["corners"],
+                referenceProvenance=({k: v for k, v in data["referenceDraft"].items() if k != "labels"}
+                                     if data.get("referenceApplied") else None),
                 split="unassigned", samples=samples))
 
 
@@ -225,6 +245,7 @@ if __name__ == "__main__":
     make.add_argument("--id", required=True)
     make.add_argument("--group", required=True)
     make.add_argument("--corners", type=json.loads, required=True)
+    make.add_argument("--reference", type=Path, help="同じ配置・向きの確認済みGT。明示操作まで未適用")
     run = commands.add_parser("serve")
     run.add_argument("--data", type=Path, required=True)
     run.add_argument("--port", type=int, default=0)
@@ -234,7 +255,7 @@ if __name__ == "__main__":
     export.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "prepare":
-        prepare(args.image, args.output, args.id, args.group, args.corners)
+        prepare(args.image, args.output, args.id, args.group, args.corners, args.reference)
         print("未分類361点で作成しました。")
     elif args.command == "serve":
         serve(args.data, args.port, args.ready_file)

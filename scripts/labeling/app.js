@@ -121,6 +121,10 @@ function render() {
         b.disabled=aligning;b.classList.toggle("active",data.labels[selected]===b.dataset.label);
     });
     $("fillEmpty").disabled=aligning;$("clear").disabled=aligning;$("undo").disabled=!history.length;
+    $("referencePanel").hidden=!data.referenceDraft;
+    $("labelMeaning").textContent=data.referenceApplied?"参考GTで実配置が分かる点はそのラベルを保ちます。実配置自体を確認できない点は判別不能です。写真での見えにくさは別の問題です。":"「判別不能」は写真から決められない場合です。「空」とは別に記録します。";
+    $("applyReference").disabled=aligning||data.labels.some(v=>v!==null);
+    $("referenceStatus").textContent=data.referenceDraft ? `${data.referenceDraft.datasetId} · 更新 ${data.referenceDraft.annotationRevision} · ${data.referenceApplied?"下書き適用済み。盤全体の確認は別途必要です。":"位置合わせ確認後、未分類の状態で適用できます。"}` : "";
     $("finish").disabled=aligning||missing>0||data.reviewCompleted;
     $("completion").textContent=data.reviewCompleted?"本人の確認完了として保存しています。":
         (missing===0&&!aligning?"全交点にラベルがあります。盤全体を見直してから確認完了にしてください。":"");
@@ -180,7 +184,7 @@ canvas.onpointerup=endDrag;canvas.onpointercancel=endDrag;
 $("confirmGeometry").onclick=()=>{if(!validGeometry())return;remember();data.geometryReviewed=true;aligning=false;changed();};
 $("alignMode").onclick=async()=>{
     if(data.labels.some(v=>v!==null)&&!await askConfirmation("四隅をやり直すと全ラベルを未分類へ戻します。必要なら先にJSONをダウンロードしてください。続けますか？"))return;
-    remember();data.labels=Array(361).fill(null);data.geometryReviewed=false;aligning=true;changed();
+    remember();data.labels=Array(361).fill(null);data.geometryReviewed=false;if(data.referenceDraft)data.referenceApplied=false;aligning=true;changed();
 };
 $("showGrid").onchange=render;
 function assign(label) {
@@ -206,6 +210,11 @@ $("fillEmpty").onclick=async()=>{
     if(aligning||!await askConfirmation("未分類の交点をすべて「空」にします。その後、石のある交点を黒・白へ必ず修正し、盤全体を確認してください。"))return;
     remember();data.labels=data.labels.map(v=>v===null?"empty":v);changed();
 };
+$("applyReference").onclick=async()=>{
+    if(aligning||!data.referenceDraft||data.labels.some(v=>v!==null))return;
+    if(!await askConfirmation("参考写真と石の配置・行列の向きが同じであることを確認しましたか？ ラベルを下書きにします。写真全体と照合し、違いを修正してから分類を完了してください。"))return;
+    remember();data.labels=[...data.referenceDraft.labels];data.referenceApplied=true;changed();
+};
 $("finish").onclick=async()=>{
     if(aligning||data.labels.includes(null))return;
     if(!await askConfirmation("盤全体の空・黒・白・判別不能のラベルを見直しましたか？"))return;
@@ -221,6 +230,7 @@ $("import").onchange=async event=>{
         const imported=JSON.parse(await file.text());
         for(const key of ["schemaVersion","datasetId","captureGroup","sourceSha256","width","height","coordinateConvention"])
             if(imported[key]!==data[key])throw new Error("別の画像・データセットです");
+        if(data.referenceDraft&&(JSON.stringify(imported.referenceDraft)!==JSON.stringify(data.referenceDraft)||typeof imported.referenceApplied!=="boolean"||imported.referenceApplied&&!imported.geometryReviewed))throw new Error("参考GTの出典・適用状態が違います");
         if(!Array.isArray(imported.labels)||imported.labels.length!==361||imported.labels.some(v=>v!==null&&(typeof v!=="string"||!Object.hasOwn(names,v))))throw new Error("ラベル形式が違います");
         if(typeof imported.geometryReviewed!=="boolean"||typeof imported.reviewCompleted!=="boolean")throw new Error("確認状態が不正です");
         const previous=data;
@@ -229,6 +239,7 @@ $("import").onchange=async event=>{
         if(!valid||(!imported.geometryReviewed&&imported.labels.some(v=>v!==null))||(imported.reviewCompleted&&imported.labels.includes(null)))throw new Error("位置合わせ・完了状態が不正です");
         if(!await askConfirmation("現在のラベルをこのJSONで置き換えますか？"))return;
         remember();data={...data,corners:imported.corners,labels:imported.labels,geometryReviewed:imported.geometryReviewed,reviewCompleted:imported.reviewCompleted};
+        if(data.referenceDraft)data.referenceApplied=imported.referenceApplied;
         aligning=!data.geometryReviewed;scheduleSave();render();
     } catch(error){status("読み込めません："+error.message,"error");}
     event.target.value="";

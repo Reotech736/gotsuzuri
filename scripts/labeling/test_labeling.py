@@ -37,6 +37,41 @@ class LabelingTest(unittest.TestCase):
         with self.assertRaises(FileExistsError):
             prepare(self.image, self.folder, "fixture", "synthetic-test", CORNERS)
 
+    def test_reference_is_an_unapplied_draft_with_frozen_provenance(self):
+        reviewed = dict(self.data, geometryReviewed=True, reviewCompleted=True, labels=["empty"] * 361)
+        reviewed["labels"][5] = "black"
+        reference = self.root / "reviewed.json"
+        atomic_json(reference, reviewed)
+        target = self.root / "target"
+        draft = prepare(self.image, target, "target", "synthetic-test", CORNERS, reference)
+        self.assertEqual([None] * 361, draft["labels"])
+        self.assertFalse(draft["referenceApplied"])
+        self.assertFalse(draft["reviewCompleted"])
+        self.assertEqual("black", draft["referenceDraft"]["labels"][5])
+        candidate = copy.deepcopy(draft)
+        candidate["referenceApplied"] = True
+        with self.assertRaises(ValueError):
+            validate_edit(draft, candidate)
+        candidate.update(geometryReviewed=True, labels=reviewed["labels"])
+        edited = validate_edit(draft, candidate)
+        self.assertFalse(edited["reviewCompleted"])
+        with self.assertRaises(ValueError):
+            export_crops(target, self.root / "unfinished")
+        candidate["referenceDraft"]["annotationRevision"] += 1
+        with self.assertRaises(ValueError):
+            validate_edit(draft, candidate)
+        edited["reviewCompleted"] = True
+        atomic_json(target / "annotations.json", edited)
+        export_crops(target, self.root / "export")
+        manifest = json.loads((self.root / "export" / "manifest.json").read_text())
+        self.assertEqual("fixture", manifest["referenceProvenance"]["datasetId"])
+        self.assertNotIn("labels", manifest["referenceProvenance"])
+        for invalid in (dict(reviewed, reviewCompleted=False), dict(reviewed, captureGroup="other")):
+            atomic_json(reference, invalid)
+            with self.assertRaises(ValueError):
+                prepare(self.image, self.root / "rejected", "rejected", "synthetic-test", CORNERS, reference)
+        self.assertFalse((self.root / "rejected").exists())
+
     def test_projection_supports_perspective_and_rejects_bad_geometry(self):
         trapezoid = [[.2, .1], [.8, .15], [.95, .9], [.05, .85]]
         validate_corners(trapezoid)

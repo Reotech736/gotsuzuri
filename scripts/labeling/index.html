@@ -9,11 +9,12 @@
 <p class="muted">画像上の左上を1行1列とします。木枠ではなく盤面の交点が基準です。AIの予測ラベルは表示しません。</p></section>
 <aside>
 <div class="progress"><strong id="progress">未分類361点</strong><progress id="progressBar" max="361" value="0"></progress><p id="counts"></p></div>
+<div id="referencePanel" hidden><p>同じ配置の確認済みGTを下書きにできます。写真の左上から数えた行・列と石配置が同じか確認してください。参考GTは実配置を表し、この写真だけで判別できる保証ではありません。</p><button id="applyReference">同じ配置・向きを確認してGTを下書きにする</button><p id="referenceStatus" class="muted"></p></div>
 <h2 id="selection">1行・1列</h2><p id="currentLabel">未分類</p>
 <canvas id="detail" width="360" height="270" aria-label="選択した交点周辺の原寸画像"></canvas>
 <p class="muted" id="cropInfo">十字は盤面交点です。石上面の中心とは異なる場合があります。</p>
 <div class="labels" id="labelButtons"><button data-label="empty">0 · 空</button><button data-label="black">1 · 黒</button><button data-label="white">2 · 白</button><button data-label="unknown">3 · 判別不能</button></div>
-<p class="muted">「判別不能」は写真から決められない場合です。「空」とは別に記録します。</p>
+<p class="muted" id="labelMeaning">「判別不能」は写真から決められない場合です。「空」とは別に記録します。</p>
 <div class="actions"><button id="previous">← 前へ</button><button id="next">次へ →</button><button id="nextMissing">未分類へ</button><button id="clear">未分類へ戻す</button><button id="undo">取り消す</button></div>
 <label class="option"><input type="checkbox" id="autoAdvance">分類後、次の未分類へ進む</label>
 <details><summary>まとめて操作・保存</summary><p>盤全体を確認したうえで使います。石がある点は、必ず黒・白へ修正してください。</p><button id="fillEmpty">未分類をすべて空にする</button><hr><button id="download">JSONをダウンロード</button><label class="file">JSONを読み込む<input id="import" type="file" accept="application/json,.json"></label></details>
