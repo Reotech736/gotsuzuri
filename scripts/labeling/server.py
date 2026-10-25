@@ -160,6 +160,9 @@ def make_server(folder, port=0):
     folder = folder.resolve()
     path = folder / "annotations.json"
     current = json.loads(path.read_text(encoding="utf-8"))
+    center_study = current.get("kind") == "stone-center-study"
+    if center_study:
+        from centers import validate_centers
     token = secrets.token_urlsafe(24)
     lock = threading.Lock()
 
@@ -190,6 +193,15 @@ def make_server(folder, port=0):
                       "/app.js": (HERE / "app.js", "text/javascript; charset=utf-8"),
                       "/style.css": (HERE / "style.css", "text/css; charset=utf-8"),
                       "/source.png": (folder / "source.png", "image/png")}
+            if center_study:
+                assets = {"/": (HERE / "centers.html", "text/html; charset=utf-8"),
+                          "/app.js": (HERE / "centers.js", "text/javascript; charset=utf-8"),
+                          "/style.css": (HERE / "style.css", "text/css; charset=utf-8")}
+                for task in current["tasks"]:
+                    for key in ("file", "referenceFile"):
+                        name = task[key]
+                        if Path(name).name == name:
+                            assets["/" + name] = (folder / name, "image/png")
             if route in assets:
                 file, kind = assets[route]
                 return self.response(200, file.read_bytes(), kind)
@@ -213,7 +225,7 @@ def make_server(folder, port=0):
                 with lock:
                     if type(payload.get("expectedRevision")) is not int or payload["expectedRevision"] != current["revision"]:
                         return self.response(409, {"error": "別の画面で更新されました。JSONを退避し、画面を再読み込みしてください"})
-                    updated = validate_edit(current, payload.get("data"))
+                    updated = (validate_centers if center_study else validate_edit)(current, payload.get("data"))
                     updated["revision"] = current["revision"] + 1
                     updated["savedAt"] = datetime.now(timezone.utc).isoformat()
                     shutil.copyfile(path, folder / "annotations.previous.json")
