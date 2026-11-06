@@ -6,6 +6,9 @@
 <style>
 *{box-sizing:border-box}body{margin:0;background:#111b22;color:#e5edf2;font:15px/1.6 system-ui,sans-serif}header{padding:18px 24px;border-bottom:1px solid #34434e}h1{font-size:22px;margin:0}p{margin:4px 0;color:#b7c8d4}main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;padding:16px}section,aside{min-width:0}button,select{background:#233642;color:#f4f8fa;border:1px solid #66808f;border-radius:6px;padding:8px;cursor:pointer;font:inherit}button:hover{background:#354e5f}button:disabled{opacity:.5;cursor:default}label{display:inline-flex;align-items:center;gap:5px;margin:4px 10px 4px 0}input{accent-color:#4ed3ed}select{max-width:100%}.toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}.panel{background:#1a2933;border:1px solid #344c5c;border-radius:8px;padding:12px;margin-bottom:12px}.viewer{height:65vh;min-height:360px;border:1px solid #4e6574;background:#0b1115;overflow:hidden;position:relative}canvas{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;padding:8px 0}.cyan{color:#46e2f5}.orange{color:#ffac42}.pink{color:#ff71c7}.red{color:#ff7070}.small{font-size:13px}#summary{font-variant-numeric:tabular-nums}#detail{white-space:pre-wrap;overflow-wrap:anywhere;min-height:110px}#list{max-height:34vh;overflow:auto;display:grid;gap:6px}#list button{text-align:left;font-size:13px}#list button[aria-pressed=true]{outline:2px solid #5de5f4;background:#314b5b}h2{font-size:16px;margin:0 0 8px}#status{color:#ffca7a;min-height:24px}@media(max-width:900px){main{grid-template-columns:1fr}.viewer{height:60vh}#list{max-height:260px}}
 </style>
+<style>
+#gtBoard{display:block;width:100%;height:auto;background:#d5ad6a;border-radius:4px;cursor:crosshair}#gtBoard:focus{outline:2px solid #ffe34d}#gtSelection{min-height:24px;color:#ffe387}.gt-panel p{font-size:12px}
+</style>
 <header><h1>碁つづり｜候補と交点の診断</h1><p>保存済みのPC試作を読む画面です。写真・四隅・GT・候補の編集や再判定は行いません。</p></header>
 <main><section>
 <div class="toolbar"><label>写真<select id="dataset" aria-label="写真"></select></label><label>比較条件<select id="mode" aria-label="比較条件"><option value="zero">補正なし</option><option value="manual">手動の一定位置補正</option></select></label></div>
@@ -17,6 +20,7 @@
 <div class="legend"><span class="cyan">● 候補→割当交点の実線</span><span class="orange">◇ 未割当候補・破線は代替交点</span><span class="pink">＋ 本人中心／□ 補正後の仮想位置</span><span class="red">□ 誤った確定判定</span><span class="orange">○ 不明</span></div>
 <p class="small">候補は色を支持した位置で、石上面の真の中心ではありません。GT表示は評価の参照で、推論への入力ではありません。ドラッグで移動、ホイールで拡大。交点・候補をクリックすると詳細を表示します。</p><p class="small">表示は長辺2048のJPEGプレビューです。再圧縮した色・細部を色判定の検証に使わないでください。元PNGと評価入力は保持しています。</p><div id="status" role="status"></div>
 </section><aside>
+<div class="panel gt-panel"><h2>GTの正解配置（真上からの模式図）</h2><svg id="gtBoard" viewBox="0 0 460 460" role="img" tabindex="0" aria-label="GTの正解配置"></svg><p id="gtSelection" aria-live="polite">交点を選ぶと写真と連動します。</p><p>上・左から1〜19。写真と同じ行列の向きです。図の交点をクリックすると写真を拡大します。矢印キーでも交点を選べます。</p></div>
 <div class="panel"><h2>保存された評価</h2><div id="summary"></div><p class="small">同じ配置・1撮影グループ。手動補正は奥側4石を校正に使います。上方は校正中心がなく補正0です。</p></div>
 <div class="panel"><h2>選択した対象</h2><div id="detail">写真の候補または交点を選んでください。</div></div>
 <div class="panel"><h2>確認対象</h2><select id="filter" aria-label="確認対象の種類"><option value="wrong">誤った確定判定</option><option value="unknown">不明の交点</option><option value="unassigned">未割当の候補</option><option value="changed">現行から変化した交点</option><option value="all">すべての候補</option></select><p id="count" class="small"></p><div id="list"></div></div>

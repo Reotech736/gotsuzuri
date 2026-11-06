@@ -28,6 +28,7 @@
     ctx.stroke();
   }
   function draw() {
+    drawGT();
     ctx.clearRect(0,0,width,height);
     if (!photo || !view) return;
     ctx.drawImage(photo,tx,ty,view.width*scale,view.height*scale);
@@ -56,6 +57,39 @@
     }
     if(enabled('centers'))for(const center of view.centers)mark(center.image,'#ff71c7','cross',9);
     if(selection){const selected=selection.kind==='site'?view.sites[selection.id]:view.candidates.find(c=>c.id===selection.id);if(selected)mark(selected.image,'#ffe34d','circle',13);}
+  }
+  function drawGT() {
+    if(!view)return;
+    const svg=$('gtBoard'), ns='http://www.w3.org/2000/svg', start=35, step=390/18;
+    const elements=[];
+    const add=(tag,attrs,text)=>{const el=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))el.setAttribute(k,String(v));if(text!==undefined)el.textContent=text;elements.push(el);return el;};
+    const point=i=>[start+(i%19)*step,start+Math.floor(i/19)*step];
+    for(let n=0;n<19;n++) {
+      const p=start+n*step;
+      add('line',{x1:start,y1:p,x2:425,y2:p,stroke:'#584123','stroke-width':1});
+      add('line',{x1:p,y1:start,x2:p,y2:425,stroke:'#584123','stroke-width':1});
+      add('text',{x:p,y:20,'text-anchor':'middle','font-size':10,fill:'#302719'},n+1);
+      add('text',{x:17,y:p+3.5,'text-anchor':'middle','font-size':10,fill:'#302719'},n+1);
+    }
+    for(const r of [3,9,15])for(const c of [3,9,15])add('circle',{cx:start+c*step,cy:start+r*step,r:2.5,fill:'#584123'});
+    for(const s of view.sites) {
+      const [x,y]=point(s.index);
+      if(['black','white'].includes(s.truth))add('circle',{cx:x,cy:y,r:9.5,fill:s.truth==='black'?'#141414':'#faf8ed',stroke:s.truth==='black'?'#000':'#75664f','stroke-width':1,class:'gt-stone','data-state':s.truth});
+      else if(s.truth==='unknown')add('text',{x,y:y+5,'text-anchor':'middle','font-size':16,fill:'#923a00'},'?');
+    }
+    let selectedIndex=null, alternatives=[];
+    if(selection?.kind==='site')selectedIndex=selection.id;
+    else if(selection?.kind==='candidate') {
+      const a=view.candidates.find(c=>c.id===selection.id).assignment;
+      selectedIndex=a.assignedIndex;
+      if(selectedIndex===null)alternatives=a.alternatives;
+    }
+    if(selectedIndex!==null){const [x,y]=point(selectedIndex);add('rect',{x:x-11,y:y-11,width:22,height:22,fill:'none',stroke:'#e33a24','stroke-width':3,class:'gt-selection'});}
+    for(const a of alternatives){const [x,y]=point(a.index);add('circle',{cx:x,cy:y,r:11,fill:'none',stroke:'#d34d00','stroke-width':2,'stroke-dasharray':'3 2'});}
+    const black=view.sites.filter(s=>s.truth==='black').length,white=view.sites.filter(s=>s.truth==='white').length;
+    svg.setAttribute('aria-label',`GTの正解配置：黒${black}、白${white}。クリックまたは矢印キーで交点を選択`);
+    svg.replaceChildren(...elements);
+    $('gtSelection').textContent=selectedIndex!==null?`${Math.floor(selectedIndex/19)+1}行 ${selectedIndex%19+1}列：GT ${names[view.sites[selectedIndex].truth]}`:alternatives.length?'未割当：破線の輪は最近傍・次点の候補交点です。':`本人確認済み：黒${black}・白${white}。写真の隠れを復元した図ではありません。`;
   }
   function fit() {if(!view)return;scale=Math.min(width/view.width,height/view.height)*.96;tx=(width-view.width*scale)/2;ty=(height-view.height*scale)/2;draw();}
   function focus(points) {
@@ -118,6 +152,20 @@
   options.forEach(id=>$(id).onchange=draw);
   $('fit').onclick=fit;$('far').onclick=()=>focus(view.sites.filter(s=>s.row<=4&&s.column>=2&&s.column<=8).map(s=>s.image));
   $('zoomIn').onclick=()=>zoom(1.5);$('zoomOut').onclick=()=>zoom(1/1.5);
+  $('gtBoard').onclick=e=>{
+    const rect=$('gtBoard').getBoundingClientRect();
+    const col=(e.clientX-rect.left)*460/rect.width, row=(e.clientY-rect.top)*460/rect.height;
+    const c=Math.round((col-35)/(390/18)),r=Math.round((row-35)/(390/18));
+    if(c>=0&&c<19&&r>=0&&r<19)select('site',r*19+c,true);
+  };
+  $('gtBoard').onkeydown=e=>{
+    const delta={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];
+    if(!delta)return;e.preventDefault();
+    let index=selection?.kind==='site'?selection.id:180;
+    if(selection?.kind==='candidate')index=view.candidates.find(c=>c.id===selection.id).assignment.assignedIndex??180;
+    const c=Math.max(0,Math.min(18,index%19+delta[0])),r=Math.max(0,Math.min(18,Math.floor(index/19)+delta[1]));
+    select('site',r*19+c,true);
+  };
   canvas.onwheel=e=>{e.preventDefault();const rect=canvas.getBoundingClientRect();zoom(e.deltaY<0?1.15:1/1.15,e.clientX-rect.left,e.clientY-rect.top);};
   canvas.onpointerdown=e=>{if(!photo)return;canvas.setPointerCapture(e.pointerId);drag={x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY};};
   canvas.onpointermove=e=>{if(!drag)return;tx+=e.clientX-drag.x;ty+=e.clientY-drag.y;drag.x=e.clientX;drag.y=e.clientY;draw();};
