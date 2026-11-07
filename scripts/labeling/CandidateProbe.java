@@ -35,6 +35,7 @@ public class CandidateProbe {
                 image.getRGB(0,0,image.getWidth(),image.getHeight(),null,0,image.getWidth()));
         for (IntersectionCandidate c : StoneClassifier.INSTANCE.analyze(pixels, projection).getCandidates())
             System.out.println("B\t"+c.getColumn()+"\t"+c.getRow()+"\t"+c.getState());
+        if (args.length == 9) return; // 現行方式だけの比較では密な候補探索を実行しない。
         Class<?> patchClass = Class.forName("io.github.reotech736.gotsuzuri.StoneClassifier$Patch");
         Class<?> colorClass = Class.forName("io.github.reotech736.gotsuzuri.StoneClassifier$ColorSample");
         Method sample = StoneClassifier.class.getDeclaredMethod("samplePatch", PixelImage.class, BoardProjection.class, double.class, double.class);
