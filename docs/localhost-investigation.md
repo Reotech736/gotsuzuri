@@ -72,3 +72,24 @@ node .\scripts\diagnostics\localhost-probe.cjs --attempts 50 --sizes 1048576
 localhostでもTCPはプロセスとOSの通信処理を経由する。WinError 10054は、確立済み接続がリセットされたというWinsockの通知であり、インターネット回線の障害やアプリのクラッシュまで示すものではない。[Microsoftのエラー定義](https://learn.microsoft.com/en-us/windows/win32/winsock/windows-sockets-error-codes-2) を参照する。
 
 送信側のcloseと受信完了は同じ出来事ではなく、通常の終了と強制終了も区別される。今回の観測と一般的な仕組みを混同せず、原因の確定には追加の証拠を使う。[Microsoftのソケット終了手順](https://learn.microsoft.com/en-us/windows/win32/winsock/graceful-shutdown-linger-options-and-socket-closure-2) を参照する。
+
+## PC用保存サーバーへの接続維持の実装・検証
+
+本人の「次に進もう」を受け、`scripts/labeling/server.py` で正常なHTTP/1.1応答をkeep-aliveにした。クライアントがcloseを要求した場合や、拒否・エラー応答は閉じる。圧縮後の正確なContent-Lengthを維持し、使われない接続や途中で止まった要求は5秒のソケットタイムアウトで終了する。待ち受けは127.0.0.1のまま、Host・Origin・トークン・更新番号・保存ID再送・GTの形式を維持した。
+
+持続接続では本文の境界が次の要求に影響するため、本文付きGET、Transfer-Encoding、重複／曖昧なContent-LengthのPOSTを拒否して閉じる。未読本文がある拒否応答で接続を再利用しない。人工GTだけを使う4件の新規テストで、1MB超の画像と保存／再送を同じソケットで処理すること、競合拒否でラベルを戻さないこと、Host・Origin・トークン拒否、曖昧な本文の拒否、アイドル終了とクライアント指定closeを確認した。
+
+別の人工GTサーバーで、1,230,484バイトのPNG（バイト数・SHA-256照合）を反復転送した。同じハンドラーで応答前にcloseを強制した対照は20回中1回成功・19回は1秒の読取タイムアウト。接続維持は毎回新規接続50/50、同じ接続の再利用50/50で受信成功。さらに、保存50回＋同じ保存IDの再送50回＋各回の読戻しを確認し、最終更新番号50・ラベル一致を確認した。この対照の失敗は以前のNodeのECONNRESETと同じ種類と決めつけず、条件・時間上限の異なる読取タイムアウトとして記録する。
+
+生の実験コードと結果は `captures/diagnostics/keepalive-api-20261107-v1/`。結果JSONにサーバーソース・人工画像のハッシュを記録した。人工GTはテスト終了時に削除され、本人の画像・GTは使っていない。クライアントが正常受信後に接続を閉じた際、次の要求待ちでサーバー側ConnectionResetErrorも1件表示されたが、本文転送の失敗はなかった。keep-aliveでも一切リセットが起こらなくなったとは報告しない。
+
+検証はPython39件（新規4件）・Node7件が成功。全体テストの初回は未変更の可視化サーバーのHTTPテストでWinError 10054が発生し、設定を変えず再実行で全件成功した。再実行時にも次の要求待ちのサーバー側リセットの表示はあった。診断結果の失敗やこの制約を隠すために再試行するテストへ変更していない。
+
+```powershell
+python -m unittest discover -s scripts/labeling -p 'test_*.py' -v
+node --test scripts/labeling/test_save_transport.cjs
+```
+
+変更は新しく起動するGT／中心確認サーバーから有効。本人が操作している可能性がある配置B上方のサーバーは再起動せず、現在の画面の接続方式は旧版のまま。上方GTの完了・保存を確認した後、固定位置など次の画面を起動する際に新方式を使う。可視化専用サーバーは今回変更していない。Android本体・ビルド・端末・システム設定は変更していない。
+
+HTTP/1.1の持続接続と正確なContent-Lengthの要件は [Python 3.12の公式仕様](https://docs.python.org/3.12/library/http.server.html#http.server.BaseHTTPRequestHandler.protocol_version) に従う。接続終了を避けることで今回の再現条件は改善したが、OS内のどの部品が切断を発生させるかの特定は引き続き未完了。

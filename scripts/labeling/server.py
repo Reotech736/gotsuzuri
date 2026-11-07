@@ -172,6 +172,7 @@ def make_server(folder, port=0):
 
     class Handler(BaseHTTPRequestHandler):
         protocol_version = 'HTTP/1.1'
+        timeout = 5  # 使われなくなった接続・途中で止まった要求を残さない。
         def log_message(self, *_):
             pass  # 個人のパスやラベルをログへ出さない。
 
@@ -184,8 +185,10 @@ def make_server(folder, port=0):
             self.send_header("Content-Type", kind)
             self.send_header("Content-Length", str(len(encoded)))
             self.send_header("Cache-Control", "no-store")
-            self.send_header('Connection', 'close')
-            self.close_connection = True
+            # 本文を読み切った正常応答だけを維持する。拒否応答は未読本文ごと閉じる。
+            keep_alive = status == 200 and not self.close_connection
+            self.send_header('Connection', 'keep-alive' if keep_alive else 'close')
+            self.close_connection = not keep_alive
             if compressed:
                 self.send_header('Content-Encoding', 'gzip')
             self.send_header("X-Content-Type-Options", "nosniff")
@@ -200,6 +203,9 @@ def make_server(folder, port=0):
         def do_GET(self):
             if not self.valid_host():
                 return self.response(403, {"error": "local host only"})
+            lengths = self.headers.get_all('Content-Length', [])
+            if self.headers.get_all('Transfer-Encoding') or (lengths and lengths != ['0']):
+                return self.response(400, {"error": "GETの本文には対応していません"})
             route = urlparse(self.path).path
             assets = {"/": (HERE / "index.html", "text/html; charset=utf-8"),
                       "/app.js": (HERE / "app.js", "text/javascript; charset=utf-8"),
@@ -233,7 +239,11 @@ def make_server(folder, port=0):
             if self.path != "/api/save":
                 return self.response(404, {"error": "not found"})
             try:
-                length = int(self.headers.get("Content-Length", "0"))
+                lengths = self.headers.get_all('Content-Length', [])
+                if (self.headers.get_all('Transfer-Encoding') or len(lengths) != 1
+                        or not lengths[0].isascii() or not lengths[0].isdecimal()):
+                    raise ValueError('本文長を一意に指定してください')
+                length = int(lengths[0])
                 if not 0 < length < 65536:
                     raise ValueError("保存データが大きすぎます")
                 payload = json.loads(self.rfile.read(length))
