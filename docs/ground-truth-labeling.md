@@ -241,3 +241,5 @@ node --test scripts/labeling/test_save_transport.cjs
 固定位置はarrangement-b-fixed-ref-20261107を新規作成し、固定した上方更新232を未適用の参考GTへ登録。元画像は既に保管済みのoriginal.binから準備し、Downloadsへ依存しない。従来の未分類arrangement-b-fixed-20261107は準備記録として保持。新しいfixed-refは未分類361点・位置合わせ未確認・分類未完了・参考GT未適用で始め、本人の確認を代行しない。
 
 接続維持版で固定位置画面を起動し、原寸写真・交点・参考GTの出典・位置合わせ確認前は適用不可の表示を確認した。四隅と同じ配置・向きを本人が確認して参考GTを下書きへ適用し、写真全体を見直してから分類完了する。元の上方GTと旧fixedデータは非変更。コード変更はなく、出典・完了状態・非変更と文書差分を確認した。認識比較はまだ実施していない。
+
+2026-11-08追記：B固定位置も本人の完了報告後、更新7・位置合わせ／分類完了・referenceApplied=trueをPC確認した。上方更新232と全361点一致（空234・黒63・白64）。上方の参考GTハッシュ・更新番号と元JPEGハッシュを検証し、arrangement-b-fixed-ref-20261107-crops/へ原寸361切り出し・manifest・annotations-reviewed.jsonを固定、書き出し前後の元GT非変更を確認した。[Bの現行PC比較](baseline-arrangement-b.md) も完了した。
