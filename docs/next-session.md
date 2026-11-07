@@ -14,7 +14,7 @@
 
 本人の追加依頼で接続切断を調査した。Pythonの最小HTTPサーバーだけで再現し、Node.jsでもECONNRESETを再現。1MB各50回の最終比較は生TCP50/50、応答直後closeのHTTP37/50、keep-alive新規接続50/50、再利用50/50だった。接続終了タイミングへの依存は確認できたが、切断を発生させている部品は未特定。GT画面・サーバーは維持し、設定を変更していない。PktMonはOSのアクセス拒否で通信トレース未実施。
 
-入口はscripts/diagnostics/localhost-probe.cjs。次の切り分けは通常のPowerShellから同じ診断を実行して起動環境への依存を比較すること。[観測・限界・コマンド](localhost-investigation.md) を読む。keep-aliveは改善候補で、本体へ未適用。本人が入力中かもしれないGTサーバーを不用意に再起動しない。
+入口はscripts/diagnostics/localhost-probe.cjs。2026-11-07 14:09、本人が通常のPowerShellから実行し、結果JSONを照合した。1MBのHTTP closeは8/12成功（4件ECONNRESET）、生TCP・keep-alive新規接続・再利用は各12/12成功。1KB・64KBは全条件12/12。Codexから起動した場合だけの現象ではないが、発生部品の特定には至っていない。同じ本人操作を依頼し直さない。[観測・限界・コマンド](localhost-investigation.md) を読む。次の候補は別の人工GTサーバーでPython保存APIのkeep-aliveを検証すること。keep-aliveは本体へ未適用で、本人が入力中かもしれないGTサーバーを不用意に再起動しない。
 
 ### 配置Bの2枚受領、上方の本人GT確認待ち
 
