@@ -5,6 +5,7 @@
 <main>
 <section class="board"><div class="toolbar"><strong id="datasetName"></strong><label><input id="showGrid" type="checkbox" checked>交点を表示</label><button id="alignMode">四隅を調整</button><button id="confirmGeometry">位置合わせを確認した</button></div>
 <p id="instruction">最初に、番号の付いた四隅を最外周の交点へ合わせてください。</p>
+<p class="muted">写真の読み込みが進まない場合：<label class="file">保存先のsource.pngを直接開く<input id="localPhoto" type="file" accept="image/png,.png"></label> 同じ原寸PNGかハッシュで照合します。画像のアップロード・GT変更はしません。</p>
 <div class="canvasWrap"><canvas id="board" aria-label="原寸写真と19路盤の交点"></canvas></div>
 <p class="muted">画像上の左上を1行1列とします。木枠ではなく盤面の交点が基準です。AIの予測ラベルは表示しません。</p></section>
 <aside>

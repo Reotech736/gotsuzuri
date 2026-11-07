@@ -1,4 +1,5 @@
 import copy
+import gzip
 import json
 import tempfile
 import threading
@@ -125,6 +126,27 @@ class LabelingTest(unittest.TestCase):
             self.assertEqual((right - left, bottom - top), image.size)
             self.assertEqual((185, 139, 80), image.getpixel((0, 0)))
         self.assertAlmostEqual(128 - left, sample["intersectionInCrop"][0])
+
+    def test_gzip_assets_and_image_hash_preserve_png_and_labels(self):
+        import hashlib
+        before = (self.folder/'annotations.json').read_bytes()
+        png = (self.folder/'source.png').read_bytes()
+        server = make_server(self.folder)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            origin = f'http://127.0.0.1:{server.server_port}'
+            with urlopen(Request(origin+'/app.js',headers={'Accept-Encoding':'gzip'}),timeout=5) as response:
+                self.assertEqual('gzip',response.headers['Content-Encoding'])
+                self.assertEqual((HERE/'app.js').read_bytes(),gzip.decompress(response.read()))
+            data=json.load(urlopen(origin+'/api/data',timeout=5))
+            self.assertEqual(hashlib.sha256(png).hexdigest(),data['imageSha256'])
+            self.assertEqual(before,(self.folder/'annotations.json').read_bytes())
+            self.assertEqual(png,(self.folder/'source.png').read_bytes())
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
 
     def test_http_save_is_durable_and_checks_origin_token_and_revision(self):
         server = make_server(self.folder)

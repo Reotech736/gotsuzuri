@@ -1,5 +1,6 @@
 """PC内だけで使う静止画像の正解ラベル作成。画像・ラベルはcaptures配下へ。"""
 import argparse
+import gzip
 import hashlib
 import json
 import math
@@ -165,17 +166,26 @@ def make_server(folder, port=0):
         from centers import validate_centers
     token = secrets.token_urlsafe(24)
     lock = threading.Lock()
+    image_hash = None if center_study else hashlib.sha256((folder/'source.png').read_bytes()).hexdigest()
 
     class Handler(BaseHTTPRequestHandler):
+        protocol_version = 'HTTP/1.1'
         def log_message(self, *_):
             pass  # 個人のパスやラベルをログへ出さない。
 
         def response(self, status, body, kind="application/json; charset=utf-8"):
             encoded = body if isinstance(body, bytes) else json.dumps(body, ensure_ascii=False).encode("utf-8")
+            compressed = ('json' in kind or kind.startswith('text/')) and 'gzip' in self.headers.get('Accept-Encoding', '')
+            if compressed:
+                encoded = gzip.compress(encoded)
             self.send_response(status)
             self.send_header("Content-Type", kind)
             self.send_header("Content-Length", str(len(encoded)))
             self.send_header("Cache-Control", "no-store")
+            self.send_header('Connection', 'close')
+            self.close_connection = True
+            if compressed:
+                self.send_header('Content-Encoding', 'gzip')
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Referrer-Policy", "no-referrer")
             self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'")
@@ -207,7 +217,7 @@ def make_server(folder, port=0):
                 return self.response(200, file.read_bytes(), kind)
             if route == "/api/data":
                 with lock:
-                    return self.response(200, {"data": current, "token": token})
+                    return self.response(200, {"data": current, "token": token, "imageSha256":image_hash})
             return self.response(404, {"error": "not found"})
 
         def do_POST(self):

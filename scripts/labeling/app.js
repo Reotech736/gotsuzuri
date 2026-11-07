@@ -47,7 +47,7 @@ function askConfirmation(message) {
 function changed() { data.reviewCompleted=false; scheduleSave(); render(); }
 function status(text, kind="") { $("saveStatus").textContent=text; $("saveStatus").className=kind; }
 function scheduleSave() {
-    dirty=true; status("未保存の変更があります…", "pending");
+    dirty=true; status(saveFailed?"保存が止まっています。再保存かJSON退避を行ってください":"未保存の変更があります…", saveFailed?"error":"pending");
     clearTimeout(saveTimer); saveTimer=setTimeout(save,180);
 }
 async function save() {
@@ -69,7 +69,7 @@ async function save() {
     } catch(error) {
         dirty=true; saveFailed=true; $("retrySave").hidden=false;
         status("保存失敗："+error.message, "error");
-    } finally { saving=false; }
+    } finally { saving=false; render(); }
 }
 $("retrySave").onclick=()=>{saveFailed=false;save();};
 window.addEventListener("beforeunload",event=>{if(dirty||saving){event.preventDefault();event.returnValue="";}});
@@ -127,7 +127,7 @@ function render() {
     $("applyReference").disabled=aligning||data.labels.some(v=>v!==null);
     $("referenceStatus").textContent=data.referenceDraft ? `${data.referenceDraft.datasetId} · 更新 ${data.referenceDraft.annotationRevision} · ${data.referenceApplied?"下書き適用済み。盤全体の確認は別途必要です。":"位置合わせ確認後、未分類の状態で適用できます。"}` : "";
     $("finish").disabled=aligning||missing>0||data.reviewCompleted;
-    $("completion").textContent=data.reviewCompleted?"本人の確認完了として保存しています。":
+    $("completion").textContent=data.reviewCompleted?(dirty||saving||saveFailed?"確認完了の操作は受け付けましたが、PC保存は未完了です。再保存またはJSON退避を行ってください。":"本人の確認完了をPCに保存済みです。"):
         (missing===0&&!aligning?"全交点にラベルがあります。盤全体を見直してから確認完了にしてください。":"");
 }
 
@@ -276,12 +276,36 @@ window.addEventListener("keydown",event=>{
     if(event.key==="Delete"||event.key==="Backspace"){event.preventDefault();assign(null);}
 });
 window.addEventListener("resize",render);
+let expectedImageHash;
+function showPhoto(url, release=false) {
+    photo.onload=()=>{
+        if(release)URL.revokeObjectURL(url);
+        if(photo.naturalWidth!==data.width||photo.naturalHeight!==data.height){status("写真の寸法が一致しません", "error");return;}
+        canvas.width=data.width;canvas.height=data.height;render();
+        if(saveFailed)status("保存が止まっています。再保存かJSON退避を行ってください","error");
+        else if(dirty||saving)status("未保存の変更があります…","pending");
+        else status(data.savedAt?"PCに保存済み · "+new Date(data.savedAt).toLocaleTimeString("ja-JP"):"未分類で開始 · PC内に保存");
+    };
+    photo.onerror=()=>{if(release)URL.revokeObjectURL(url);status("写真を読み込めません。保存先のsource.pngを直接開いてください", "error");};
+    photo.src=url;
+}
+$("localPhoto").onchange=async event=>{
+    const file=event.target.files[0];if(!file)return;
+    try {
+        if(!data||!expectedImageHash)throw new Error("先にデータの読み込みを待ってください");
+        const bytes=await file.arrayBuffer();
+        const digest=await crypto.subtle.digest('SHA-256',bytes);
+        const hash=Array.from(new Uint8Array(digest),value=>value.toString(16).padStart(2,'0')).join('');
+        if(hash!==expectedImageHash)throw new Error("別の画像です。この保存先のsource.pngを選んでください");
+        showPhoto(URL.createObjectURL(new Blob([bytes],{type:'image/png'})),true);
+    } catch(error){status(error.message,"error");}
+    event.target.value="";
+};
 (async()=>{
     try {
         const response=await fetch("/api/data");if(!response.ok)throw new Error("データを読み込めません");
-        const result=await response.json();data=result.data;token=result.token;aligning=!data.geometryReviewed;
-        photo.onload=()=>{canvas.width=data.width;canvas.height=data.height;render();};
-        photo.onerror=()=>status("写真を読み込めませんでした", "error");photo.src="/source.png";
-        status(data.savedAt?"PCに保存済み · "+new Date(data.savedAt).toLocaleTimeString("ja-JP"):"未分類で開始 · PC内に保存");
+        const result=await response.json();data=result.data;token=result.token;expectedImageHash=result.imageSha256;aligning=!data.geometryReviewed;
+        status("原寸写真を読み込み中… 進まない場合はsource.pngを直接開けます");
+        showPhoto("/source.png");
     } catch(error){status(error.message,"error");}
 })();
