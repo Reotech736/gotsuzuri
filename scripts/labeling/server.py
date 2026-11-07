@@ -7,6 +7,7 @@ import math
 import secrets
 import shutil
 import threading
+import uuid
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -166,6 +167,7 @@ def make_server(folder, port=0):
         from centers import validate_centers
     token = secrets.token_urlsafe(24)
     lock = threading.Lock()
+    last_save = None
     image_hash = None if center_study else hashlib.sha256((folder/'source.png').read_bytes()).hexdigest()
 
     class Handler(BaseHTTPRequestHandler):
@@ -201,6 +203,7 @@ def make_server(folder, port=0):
             route = urlparse(self.path).path
             assets = {"/": (HERE / "index.html", "text/html; charset=utf-8"),
                       "/app.js": (HERE / "app.js", "text/javascript; charset=utf-8"),
+                      "/save-transport.js": (HERE / "save-transport.js", "text/javascript; charset=utf-8"),
                       "/style.css": (HERE / "style.css", "text/css; charset=utf-8"),
                       "/source.png": (folder / "source.png", "image/png")}
             if center_study:
@@ -217,11 +220,13 @@ def make_server(folder, port=0):
                 return self.response(200, file.read_bytes(), kind)
             if route == "/api/data":
                 with lock:
-                    return self.response(200, {"data": current, "token": token, "imageSha256":image_hash})
+                    receipt = ({k:last_save[k] for k in ('saveId','expectedRevision','revision','savedAt')}
+                               if last_save is not None else None)
+                    return self.response(200, {"data": current, "token": token, "imageSha256":image_hash,"lastSave":receipt})
             return self.response(404, {"error": "not found"})
 
         def do_POST(self):
-            nonlocal current
+            nonlocal current, last_save
             expected_origin = f"http://127.0.0.1:{self.server.server_port}"
             if not self.valid_host() or self.headers.get("Origin") != expected_origin or self.headers.get("X-Label-Token") != token:
                 return self.response(403, {"error": "保存元が一致しません"})
@@ -232,7 +237,16 @@ def make_server(folder, port=0):
                 if not 0 < length < 65536:
                     raise ValueError("保存データが大きすぎます")
                 payload = json.loads(self.rfile.read(length))
+                save_id = payload.get('saveId')
+                if save_id is not None and (not isinstance(save_id,str) or str(uuid.UUID(save_id)) != save_id):
+                    raise ValueError('invalid save ID')
+                data_hash = hashlib.sha256(json.dumps(payload.get('data'), sort_keys=True, separators=(',',':'),allow_nan=False).encode()).hexdigest()
                 with lock:
+                    if save_id is not None and last_save is not None and save_id == last_save['saveId']:
+                        if (type(payload.get('expectedRevision')) is int and payload['expectedRevision'] == last_save['expectedRevision'] and
+                                data_hash == last_save['dataHash'] and current['revision'] == last_save['revision']):
+                            return self.response(200, {'revision':last_save['revision'],'savedAt':last_save['savedAt']})
+                        return self.response(409, {'error':'同じ保存IDで異なる入力が届きました。JSONを退避してください'})
                     if type(payload.get("expectedRevision")) is not int or payload["expectedRevision"] != current["revision"]:
                         return self.response(409, {"error": "別の画面で更新されました。JSONを退避し、画面を再読み込みしてください"})
                     updated = (validate_centers if center_study else validate_edit)(current, payload.get("data"))
@@ -241,6 +255,9 @@ def make_server(folder, port=0):
                     shutil.copyfile(path, folder / "annotations.previous.json")
                     atomic_json(path, updated)
                     current = updated
+                    last_save = (dict(saveId=save_id, expectedRevision=payload['expectedRevision'],
+                                      revision=updated['revision'],savedAt=updated['savedAt'],dataHash=data_hash)
+                                 if save_id is not None else None)
                     return self.response(200, {"revision": updated["revision"], "savedAt": updated["savedAt"]})
             except (ValueError, TypeError, KeyError, json.JSONDecodeError):
                 return self.response(400, {"error": "保存内容が不正です。ラベルと位置合わせを確認してください"})

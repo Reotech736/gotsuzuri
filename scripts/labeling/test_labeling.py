@@ -4,6 +4,7 @@ import json
 import tempfile
 import threading
 import unittest
+import uuid
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -147,6 +148,42 @@ class LabelingTest(unittest.TestCase):
             server.shutdown()
             server.server_close()
             thread.join()
+
+    def test_save_id_replay_is_idempotent_and_cannot_overwrite_changes(self):
+        server = make_server(self.folder)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            origin = f'http://127.0.0.1:{server.server_port}'
+            live=json.load(urlopen(origin+'/api/data',timeout=5))
+            candidate=dict(live['data'],geometryReviewed=True)
+            candidate['labels'][0]='black'
+            payload=dict(saveId=str(uuid.uuid4()),expectedRevision=0,data=candidate)
+            headers={'Content-Type':'application/json','Origin':origin,'X-Label-Token':live['token']}
+            def send(value):
+                return json.load(urlopen(Request(origin+'/api/save',json.dumps(value).encode(),headers),timeout=5))
+            first=send(payload)
+            saved=(self.folder/'annotations.json').read_bytes()
+            previous=(self.folder/'annotations.previous.json').read_bytes()
+            self.assertEqual(first,send(payload))
+            self.assertEqual(saved,(self.folder/'annotations.json').read_bytes())
+            self.assertEqual(previous,(self.folder/'annotations.previous.json').read_bytes())
+            receipt=json.load(urlopen(origin+'/api/data',timeout=5))['lastSave']
+            self.assertEqual(payload['saveId'],receipt['saveId'])
+            self.assertEqual(0,receipt['expectedRevision'])
+            self.assertEqual(1,receipt['revision'])
+            altered=copy.deepcopy(payload);altered['data']['labels'][0]='white'
+            with self.assertRaises(HTTPError) as collision:send(altered)
+            self.assertEqual(409,collision.exception.code)
+            next_save=copy.deepcopy(altered);next_save.update(saveId=str(uuid.uuid4()),expectedRevision=1)
+            self.assertEqual(2,send(next_save)['revision'])
+            with self.assertRaises(HTTPError) as stale:send(payload)
+            self.assertEqual(409,stale.exception.code)
+            actual=json.loads((self.folder/'annotations.json').read_bytes())
+            self.assertEqual('white',actual['labels'][0])
+            self.assertEqual(2,actual['revision'])
+        finally:
+            server.shutdown();server.server_close();thread.join()
 
     def test_http_save_is_durable_and_checks_origin_token_and_revision(self):
         server = make_server(self.folder)

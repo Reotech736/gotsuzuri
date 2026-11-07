@@ -58,10 +58,7 @@ async function save() {
             dirty=false;
             const snapshot=structuredClone(data);
             status("PCへ保存中…", "pending");
-            const response=await fetch("/api/save", {method:"POST",headers:{"Content-Type":"application/json","X-Label-Token":token},
-                body:JSON.stringify({expectedRevision:data.revision,data:snapshot})});
-            const result=await response.json();
-            if(!response.ok) throw new Error(result.error || "保存できませんでした");
+            const result=await window.saveLabelSnapshot(snapshot,data.revision,token);
             data.revision=result.revision; data.savedAt=result.savedAt;
         }
         status("PCに保存済み · "+new Date(data.savedAt).toLocaleTimeString("ja-JP"));
