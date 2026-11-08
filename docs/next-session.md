@@ -10,7 +10,15 @@
 
 ステップ3の実装・検証記録は `fd1caab` としてコミット・pushし、リモートmainとの一致を確認済み。合意済みの利用場面・撮影条件・四隅指定の方式を聞き直さない。
 
-### 現在の開始点：E上方をGT固定、E固定位置の本人確認待ち
+### 現在の開始点：Eの2枚をGT固定、F上方の本人確認待ち
+
+2026-11-08、本人の完了報告後、E固定位置fixed-ref更新11の位置合わせ・分類完了・referenceApplied=true・未分類0をPC確認した。空337・黒12・白12で上方更新9と全361点一致。元JPEGと参考GTのハッシュ、manifest全ラベルを照合し、arrangement-e-fixed-ref-20261108-crops/へ原寸361切り出し・manifest・annotations-reviewed.jsonを固定。元GTは非変更。
+
+次はarrangement-f-top-20261108。保管済みF上方写真のハッシュを受領記録と照合し、配置図Fを未適用の候補として登録した。更新0・未分類361点・位置合わせ未確認・分類未完了・placementDraftApplied=false。ブラウザで原寸写真・交点・配置図Fの出典表示と位置合わせ前の適用無効を確認。現在のURLは同フォルダのserver-url.txtを読む。
+
+本人が四隅・交点確認→位置合わせ確認→「配置図を下書きにする」→写真全体の照合・修正→分類完了。本人操作を代行しない。上方固定後にF固定位置を参考GT付きで準備する。C・H・Iは留保し、新しい写真の認識比較・学習・AWS操作・Android更新は行っていない。今回はデータ準備と文書のみでコード変更なし。GT出典・361点照合、ブラウザと差分を確認し、ビルド・自動テストは再実行していない。
+
+### 以下はE固定位置GT完了前の経緯
 
 2026-11-08、本人の完了報告後、E上方更新9のgeometryReviewed=true・reviewCompleted=true・placementDraftApplied=true・未分類0をPC確認した（空337・黒12・白12）。元JPEGのハッシュ、manifestの361点と配置図出典を照合し、arrangement-e-top-20261108-crops/へ原寸361切り出し・manifest・annotations-reviewed.jsonを固定。書き出し前後で元GTは非変更。
 
