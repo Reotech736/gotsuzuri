@@ -10,7 +10,19 @@
 
 ステップ3の実装・検証記録は `fd1caab` としてコミット・pushし、リモートmainとの一致を確認済み。合意済みの利用場面・撮影条件・四隅指定の方式を聞き直さない。
 
-### 現在の開始点：D上方GT完了、固定位置の本人確認待ち
+### 現在の開始点：Dの2枚をGT固定、E上方の本人確認待ち
+
+2026-11-08、本人の完了報告後、D固定位置fixed-ref更新8の位置合わせ・分類完了・referenceApplied=trueをPC確認した。全361点が上方更新3と一致（空337・黒12・白12）。元画像と参考GTのハッシュ、manifest全ラベルを照合し、arrangement-d-fixed-ref-20261108-crops/へ原寸361切り出し・manifest・annotations-reviewed.jsonを固定した。元GTは非変更。
+
+次はarrangement-e-top-20261108。保管済みE上方写真から準備し、配置図Eを未適用の下書き候補として登録した。更新0・未分類361点・位置合わせ未確認・分類未完了・placementDraftApplied=false。現在のURLは同フォルダのserver-url.txtを読む。本人が四隅・交点を確認→位置合わせ確認→「配置図を下書きにする」→写真全体を照合・修正→分類完了。本人の確認を代行しない。上方GT固定後にE固定位置を参考GT付きで準備する。
+
+本人の下書き依頼を継続し、PCツールに配置図適用ボタンを追加。配置図は確認済みGTと別形式で出典ハッシュ・コードを保持し、位置合わせ前と既存ラベルへの適用を拒否、適用後も分類未完了。人工画像で適用・保存・取り消し、実写真Eで未適用開始とボタン無効をブラウザ確認。追加Python2件・Node7件・JS構文は成功。全Python46件は既存HTTPの接続リセットで3件失敗、対象11件の単独実行もHTTP1件失敗。通信障害が解消したとは扱わない。ログはcaptures/labeling/test-placement-20261108.logとtest-placement-targeted-20261108.log。
+
+C・H・Iは留保。追加写真の認識比較・学習・AWS操作・Android更新は行っていない。
+
+### 以下はD固定位置GT完了前の経緯
+
+### D上方GT完了、固定位置の本人確認待ち
 
 2026-11-08、本人がD上方の四隅・石位置が一致し盤全体の分類完了を操作したと報告。更新3・geometryReviewed=true・reviewCompleted=true・未分類0（空337・黒12・白12）をPC確認した。元JPEGのハッシュとmanifestの全361点を照合し、arrangement-d-top-20261108-crops/へ原寸361切り出し・manifest・annotations-reviewed.jsonを固定。配置図下書きの出典とdraft-review-confirmation.jsonも保持し、本人照合前の下書きと確認済みGTを区別した。書き出し前後で元GTは非変更。
 

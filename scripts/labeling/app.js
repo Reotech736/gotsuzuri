@@ -120,6 +120,9 @@ function render() {
     });
     $("fillEmpty").disabled=aligning;$("clear").disabled=aligning;$("undo").disabled=!history.length;
     $("referencePanel").hidden=!data.referenceDraft;
+    $("placementPanel").hidden=!data.placementDraft;
+    $("applyPlacement").disabled=aligning||data.labels.some(v=>v!==null);
+    $("placementStatus").textContent=data.placementDraft?`配置図 ${data.placementDraft.code} · ${data.placementDraftApplied?"下書き適用済み・本人の全体確認が必要です。":"位置合わせ確認後、未分類の状態で適用できます。"}`:"";
     $("labelMeaning").textContent=data.referenceApplied?"参考GTで実配置が分かる点はそのラベルを保ちます。実配置自体を確認できない点は判別不能です。写真での見えにくさは別の問題です。":"「判別不能」は写真から決められない場合です。「空」とは別に記録します。";
     $("applyReference").disabled=aligning||data.labels.some(v=>v!==null);
     $("referenceStatus").textContent=data.referenceDraft ? `${data.referenceDraft.datasetId} · 更新 ${data.referenceDraft.annotationRevision} · ${data.referenceApplied?"下書き適用済み。盤全体の確認は別途必要です。":"位置合わせ確認後、未分類の状態で適用できます。"}` : "";
@@ -204,7 +207,7 @@ canvas.onpointerup=endDrag;canvas.onpointercancel=endDrag;
 $("confirmGeometry").onclick=()=>{if(!validGeometry())return;remember();data.geometryReviewed=true;aligning=false;changed();};
 $("alignMode").onclick=async()=>{
     if(data.labels.some(v=>v!==null)&&!await askConfirmation("四隅をやり直すと全ラベルを未分類へ戻します。必要なら先にJSONをダウンロードしてください。続けますか？"))return;
-    remember();data.labels=Array(361).fill(null);data.geometryReviewed=false;if(data.referenceDraft)data.referenceApplied=false;aligning=true;changed();
+    remember();data.labels=Array(361).fill(null);data.geometryReviewed=false;if(data.referenceDraft)data.referenceApplied=false;if(data.placementDraft)data.placementDraftApplied=false;aligning=true;changed();
 };
 $("showGrid").onchange=render;
 function assign(label) {
@@ -235,6 +238,11 @@ $("applyReference").onclick=async()=>{
     if(!await askConfirmation("参考写真と石の配置・行列の向きが同じであることを確認しましたか？ ラベルを下書きにします。写真全体と照合し、違いを修正してから分類を完了してください。"))return;
     remember();data.labels=[...data.referenceDraft.labels];data.referenceApplied=true;changed();
 };
+$("applyPlacement").onclick=async()=>{
+    if(aligning||!data.placementDraft||data.labels.some(v=>v!==null))return;
+    if(!await askConfirmation("撮影指示の配置図を未確認の下書きとして使います。適用後に写真全体を照合し、違う点を修正してください。分類完了は別の操作です。"))return;
+    remember();data.labels=[...data.placementDraft.labels];data.placementDraftApplied=true;changed();
+};
 $("finish").onclick=async()=>{
     if(aligning||data.labels.includes(null))return;
     if(!await askConfirmation("盤全体の空・黒・白・判別不能のラベルを見直しましたか？"))return;
@@ -251,6 +259,7 @@ $("import").onchange=async event=>{
         for(const key of ["schemaVersion","datasetId","captureGroup","sourceSha256","width","height","coordinateConvention"])
             if(imported[key]!==data[key])throw new Error("別の画像・データセットです");
         if(data.referenceDraft&&(JSON.stringify(imported.referenceDraft)!==JSON.stringify(data.referenceDraft)||typeof imported.referenceApplied!=="boolean"||imported.referenceApplied&&!imported.geometryReviewed))throw new Error("参考GTの出典・適用状態が違います");
+        if(data.placementDraft&&(JSON.stringify(imported.placementDraft)!==JSON.stringify(data.placementDraft)||typeof imported.placementDraftApplied!=="boolean"||imported.placementDraftApplied&&!imported.geometryReviewed))throw new Error("配置図下書きの出典・適用状態が違います");
         if(!Array.isArray(imported.labels)||imported.labels.length!==361||imported.labels.some(v=>v!==null&&(typeof v!=="string"||!Object.hasOwn(names,v))))throw new Error("ラベル形式が違います");
         if(typeof imported.geometryReviewed!=="boolean"||typeof imported.reviewCompleted!=="boolean")throw new Error("確認状態が不正です");
         const previous=data;
@@ -260,6 +269,7 @@ $("import").onchange=async event=>{
         if(!await askConfirmation("現在のラベルをこのJSONで置き換えますか？"))return;
         remember();data={...data,corners:imported.corners,labels:imported.labels,geometryReviewed:imported.geometryReviewed,reviewCompleted:imported.reviewCompleted};
         if(data.referenceDraft)data.referenceApplied=imported.referenceApplied;
+        if(data.placementDraft)data.placementDraftApplied=imported.placementDraftApplied;
         aligning=!data.geometryReviewed;scheduleSave();render();
     } catch(error){status("読み込めません："+error.message,"error");}
     event.target.value="";

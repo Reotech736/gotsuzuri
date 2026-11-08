@@ -60,8 +60,26 @@ def atomic_json(path, data):
     temporary.replace(path)
 
 
-def prepare(source, output, dataset_id, group_id, corners, reference=None):
+def prepare(source, output, dataset_id, group_id, corners, reference=None, placement_plan=None, layout_code=None):
     validate_corners(corners)
+    placement = None
+    if (placement_plan is None) != (layout_code is None) or (reference is not None and placement_plan is not None):
+        raise ValueError('配置図とコードを両方指定し、参考GTとは分けてください')
+    if placement_plan is not None:
+        plan_raw = placement_plan.read_bytes()
+        plan = json.loads(plan_raw)
+        matches = [v for v in plan['layouts'] if v['code'] == layout_code]
+        if plan.get('kind') != 'capture-placement-instructions-not-ground-truth' or len(matches) != 1:
+            raise ValueError('配置図の種類またはコードが不正です')
+        labels, used = ['empty']*361, set()
+        for state in ('black', 'white'):
+            for position in matches[0][state]:
+                if (not isinstance(position, list) or len(position) != 2 or
+                        any(type(v) is not int or v not in range(1,20) for v in position) or tuple(position) in used):
+                    raise ValueError('配置図の座標が不正または重複しています')
+                row, column = position; used.add(tuple(position)); labels[(row-1)*19+column-1] = state
+        placement = dict(kind='placement-plan-not-reviewed-GT', code=layout_code,
+                         planSha256=hashlib.sha256(plan_raw).hexdigest(), labels=labels)
     draft = None
     if reference is not None:
         raw = reference.read_bytes()
@@ -92,6 +110,8 @@ def prepare(source, output, dataset_id, group_id, corners, reference=None):
                 revision=0, savedAt=None)
     if draft is not None:
         data.update(referenceDraft=draft, referenceApplied=False)
+    if placement is not None:
+        data.update(placementDraft=placement, placementDraftApplied=False)
     atomic_json(output / "annotations.json", data)
     return data
 
@@ -119,9 +139,15 @@ def validate_edit(current, candidate):
             raise ValueError("参考GTの出典は変更できません")
         if candidate["referenceApplied"] and not candidate["geometryReviewed"]:
             raise ValueError("参考GTの適用前に位置合わせを確認してください")
+    if 'placementDraft' in current:
+        if (candidate.get('placementDraft') != current['placementDraft'] or
+                type(candidate.get('placementDraftApplied')) is not bool or
+                (candidate['placementDraftApplied'] and not candidate['geometryReviewed'])):
+            raise ValueError('配置図下書きの出典・適用状態が不正です')
     return dict(current, corners=candidate["corners"], geometryReviewed=candidate["geometryReviewed"],
                 reviewCompleted=completed, labels=labels,
-                **({"referenceApplied": candidate["referenceApplied"]} if "referenceDraft" in current else {}))
+                **({"referenceApplied": candidate["referenceApplied"]} if "referenceDraft" in current else {}),
+                **({'placementDraftApplied':candidate['placementDraftApplied']} if 'placementDraft' in current else {}))
 
 
 def export_crops(folder, output):
@@ -155,6 +181,8 @@ def export_crops(folder, output):
                 annotationRevision=data["revision"], corners=data["corners"],
                 referenceProvenance=({k: v for k, v in data["referenceDraft"].items() if k != "labels"}
                                      if data.get("referenceApplied") else None),
+                placementPlanProvenance=({k:v for k,v in data['placementDraft'].items() if k != 'labels'}
+                                         if data.get('placementDraftApplied') else None),
                 split="unassigned", samples=samples))
 
 
@@ -295,6 +323,8 @@ if __name__ == "__main__":
     make.add_argument("--group", required=True)
     make.add_argument("--corners", type=json.loads, required=True)
     make.add_argument("--reference", type=Path, help="同じ配置・向きの確認済みGT。明示操作まで未適用")
+    make.add_argument('--placement-plan', type=Path, help='本人依頼の未確認配置図下書き')
+    make.add_argument('--layout-code', help='配置図のコード（例 E）')
     run = commands.add_parser("serve")
     run.add_argument("--data", type=Path, required=True)
     run.add_argument("--port", type=int, default=0)
@@ -304,7 +334,7 @@ if __name__ == "__main__":
     export.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "prepare":
-        prepare(args.image, args.output, args.id, args.group, args.corners, args.reference)
+        prepare(args.image, args.output, args.id, args.group, args.corners, args.reference, args.placement_plan, args.layout_code)
         print("未分類361点で作成しました。")
     elif args.command == "serve":
         serve(args.data, args.port, args.ready_file)

@@ -74,6 +74,53 @@ class LabelingTest(unittest.TestCase):
                 prepare(self.image, self.root / "rejected", "rejected", "synthetic-test", CORNERS, reference)
         self.assertFalse((self.root / "rejected").exists())
 
+    def test_placement_plan_stays_unreviewed_and_preserves_provenance(self):
+        plan = self.root / 'plan.json'
+        atomic_json(plan, dict(kind='capture-placement-instructions-not-ground-truth',
+                              layouts=[dict(code='E', black=[[1, 19]], white=[[19, 1]])]))
+        target = self.root / 'planned'
+        draft = prepare(self.image, target, 'planned', 'synthetic-test', CORNERS,
+                        placement_plan=plan, layout_code='E')
+        self.assertEqual([None]*361, draft['labels'])
+        self.assertFalse(draft['placementDraftApplied'])
+        candidate = copy.deepcopy(draft)
+        candidate['placementDraftApplied'] = True
+        with self.assertRaises(ValueError):
+            validate_edit(draft, candidate)
+        candidate.update(geometryReviewed=True, labels=draft['placementDraft']['labels'])
+        edited = validate_edit(draft, candidate)
+        self.assertFalse(edited['reviewCompleted'])
+        self.assertEqual('black', edited['labels'][18])
+        self.assertEqual('white', edited['labels'][342])
+        atomic_json(target / 'annotations.json', edited)
+        with self.assertRaises(ValueError):
+            export_crops(target, self.root / 'unfinished')
+        candidate['placementDraft']['code'] = 'F'
+        with self.assertRaises(ValueError):
+            validate_edit(draft, candidate)
+        edited['reviewCompleted'] = True
+        atomic_json(target / 'annotations.json', edited)
+        export_crops(target, self.root / 'export')
+        manifest = json.loads((self.root / 'export' / 'manifest.json').read_text())
+        self.assertEqual('E', manifest['placementPlanProvenance']['code'])
+        self.assertNotIn('labels', manifest['placementPlanProvenance'])
+
+    def test_placement_plan_rejects_invalid_coordinates_and_options(self):
+        plan = self.root / 'plan.json'
+        for black, white in (([[0, 1]], []), ([[1, 20]], []), ([[True, 1]], []),
+                             ([[1, 1]], [[1, 1]]), ([[1, 1], [1, 1]], [])):
+            atomic_json(plan, dict(kind='capture-placement-instructions-not-ground-truth',
+                                  layouts=[dict(code='E', black=black, white=white)]))
+            with self.assertRaises(ValueError):
+                prepare(self.image, self.root / 'bad', 'bad', 'test', CORNERS,
+                        placement_plan=plan, layout_code='E')
+            self.assertFalse((self.root / 'bad').exists())
+        for options in (dict(placement_plan=plan), dict(layout_code='E'),
+                        dict(placement_plan=plan, layout_code='X'),
+                        dict(placement_plan=plan, layout_code='E', reference=plan)):
+            with self.assertRaises(ValueError):
+                prepare(self.image, self.root / 'bad', 'bad', 'test', CORNERS, **options)
+
     def test_projection_supports_perspective_and_rejects_bad_geometry(self):
         trapezoid = [[.2, .1], [.8, .15], [.95, .9], [.05, .85]]
         validate_corners(trapezoid)
