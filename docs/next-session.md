@@ -10,7 +10,15 @@
 
 ステップ3の実装・検証記録は `fd1caab` としてコミット・pushし、リモートmainとの一致を確認済み。合意済みの利用場面・撮影条件・四隅指定の方式を聞き直さない。
 
-### 現在の開始点：留保用H上方をGT固定、H固定位置の本人確認待ち
+### 現在の開始点：留保用Hの2枚をGT固定、I上方の本人確認待ち
+
+2026-11-09、本人の完了報告後、H固定位置fixed-ref更新13の位置合わせ・分類完了・referenceApplied=true・未分類0をPC確認した（空337・黒12・白12）。上方更新3と全361点一致。元JPEG・参考GTのハッシュとmanifest全ラベルを照合し、arrangement-h-fixed-ref-20261108-crops/へ原寸361切り出し・manifest・annotations-reviewed.jsonを固定。元GTは非変更。cropsにもholdout-policy.jsonを保持し、Hの2枚はreserved-final-checkで比較・調整・学習不可。
+
+次はarrangement-i-top-20261108。保管済みI上方の元写真ハッシュを受領記録と照合し、配置図Iを未適用候補として登録した。作成時更新0・未分類361点・位置合わせ未確認・分類未完了・placementDraftApplied=false。holdout-policy.jsonでIも留保。ブラウザで原寸写真・交点・配置図Iと位置合わせ前の適用無効を確認済み。URLは同フォルダのserver-url.txtを読む。
+
+本人が四隅・交点確認→位置合わせ確認→配置図を下書きにする→実写真全体の照合・修正→分類完了。本人操作は代行しない。上方固定後にI固定位置を参考GT付きで準備する。追加6配置の残りはIの2枚。I完了後は採用GT台帳と役割を更新するが、C・H・Iの留保とG旧上方版の除外・判別不能の保持を維持する。コード変更なし。出典・361点・留保方針・画面・差分を確認し、ビルド・自動テストは再実行していない。認識比較・学習・AWS操作・Android更新なし。
+
+### 以下はH固定位置GT完了前の経緯
 
 2026-11-09、本人の完了報告後、H上方更新3の位置合わせ・分類完了・未分類0をPC確認した（空337・黒12・白12）。元JPEGハッシュ・manifest全361点を照合し、arrangement-h-top-20261108-crops/へ原寸361切り出し・manifest・annotations-reviewed.jsonを固定。元GTは非変更。holdout-policy.jsonをcropsにもコピーし、reserved-final-check、比較・調整・学習不可を維持した。
 
